@@ -256,7 +256,7 @@ const uploadZone = document.getElementById('uploadZone');
 const fileInput = document.getElementById('fileInput');
 const processing = document.getElementById('processing');
 const results = document.getElementById('results');
-const CLEANER_API = window.CLEANER_API || 'http://127.0.0.1:8787/api/clean-comments';
+const CLEANER_API = window.CLEANER_API || '/api/clean-comments';
 
 uploadZone.addEventListener('click', () => fileInput.click());
 uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });

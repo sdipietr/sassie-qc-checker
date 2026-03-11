@@ -6,6 +6,7 @@ import { execFile } from 'node:child_process';
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
+app.use(express.static('.'));
 
 const port = process.env.PORT || 8787;
 const sessionId = process.env.CLEANER_SESSION_ID || 'sassie-cleaner';
