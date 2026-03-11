@@ -1,0 +1,13 @@
+{
+  "name": "sassie-qc-checker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cleaner": "node cleaner-server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "openai": "^4.86.2"
+  }
+}
