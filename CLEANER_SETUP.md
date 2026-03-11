@@ -34,5 +34,10 @@ The app will automatically call the cleaner API and show:
 If backend is down, it falls back to showing original text.
 
 ## Model choice note
-Cleaner uses your current OpenClaw default model via OAuth.
-If you want a smaller model (e.g. mini), set that as default first in OpenClaw model config.
+Cleaner is configured to use dedicated OpenClaw agent `cleaner` (OAuth) so your main default can stay on Codex 5.3.
+Current cleaner model: `openai/gpt-4o`.
+
+Optional override:
+```bash
+CLEANER_AGENT_ID=cleaner npm run cleaner
+```
