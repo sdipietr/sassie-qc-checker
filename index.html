@@ -836,6 +836,99 @@ function detectPaintRecommendationMismatchRaw(fullText, issues) {
     }
   } catch (_e) {}
 }
+
+
+function detectPaintTemplateParserEnforced(fullText, issues) {
+  try {
+    const t = fullText || '';
+    // Only run for questionnaires that start with Paint naming
+    if (!/Paint\s*Shop:\s*Paint|\bPaint\s*20\d{2}/i.test(t)) return;
+
+    const marker='[✓✔✅☑]';
+    const options = [
+      ['a','Accent'],
+      ['b','British Paints'],
+      ['c','Dulux'],
+      ['d','Taubmans Endure'],
+      ['e','Taubmans Easy Coat'],
+      ['f','Taubmans Endure/All Weather'],
+      ['g','Taubmans Sunproof'],
+      ['h','Wattyl ID'],
+      ['i','Wattyl Solagard'],
+      ['j','Other Wattyl Products'],
+      ['k','Other Taubmans Products'],
+      ['l','Porters'],
+      ['m','A brand not listed'],
+      ['n','No recommendation/multiple brands']
+    ];
+
+    function sectionBlock(label, stopRegex){
+      const rx = new RegExp(`${label}[\\s\\S]*?${stopRegex}`, 'i');
+      const m = t.match(rx);
+      return m ? m[0] : '';
+    }
+
+    function selectedBrand(block){
+      if(!block) return null;
+      for(const [code, brand] of options){
+        const rx = new RegExp(`${code}\\.\\s*[^\\n\\r]*${marker}`,'i');
+        if(rx.test(block)) return brand;
+      }
+      return null;
+    }
+
+    const firstBlock = sectionBlock('First\\s+Recommendation', 'Second\\s+Recommendation|Sentiments|Question\\s*List');
+    const secondBlock = sectionBlock('Second\\s+Recommendation', 'Sentiments|Spot\\s+Questions|Question\\s*List');
+
+    const firstSelected = selectedBrand(firstBlock);
+    const secondSelected = selectedBrand(secondBlock);
+
+    // Pull narrative snippets likely to contain recommendation wording
+    const explain3 = (t.match(/3a\\.\\s*Please\\s*explain:\\s*([\\s\\S]*?)(?:4\\.|Second\\s+Recommendation|Sentiments)/i)||[])[1] || '';
+    const explain6 = (t.match(/6a\\.\\s*Please\\s*explain:\\s*([\\s\\S]*?)(?:7\\.|Sentiments|Spot\\s+Questions)/i)||[])[1] || '';
+
+    const brandMentions = [
+      ['Dulux', /\bdulux\b/i],
+      ['Accent', /\baccent\b/i],
+      ['British Paints', /british\s*paints/i],
+      ['Porters', /\bporters\b/i],
+      ['Taubmans Endure', /taubmans\s*endure/i],
+      ['Taubmans Easy Coat', /taubmans\s*easy\s*coat/i],
+      ['Taubmans Sunproof', /taubmans\s*sunproof/i],
+      ['Wattyl ID', /wattyl\s*id/i],
+      ['Wattyl Solagard', /wattyl\s*solagard/i],
+    ];
+
+    function firstBrandMention(txt){
+      if(!txt) return null;
+      for (const [b,rx] of brandMentions){ if(rx.test(txt)) return b; }
+      return null;
+    }
+
+    const firstMention = firstBrandMention(explain3) || firstBrandMention((t.match(/first\s+recommend(?:ed|ation)[^\.\n]{0,220}/i)||[])[0] || '');
+    const secondMention = firstBrandMention(explain6) || firstBrandMention((t.match(/second\s+recommend(?:ed|ation|alternative)[^\.\n]{0,220}/i)||[])[0] || '');
+
+    if (firstSelected && firstMention && firstSelected.toLowerCase() !== firstMention.toLowerCase()) {
+      issues.push({
+        severity: 'error',
+        type: 'paint_parser_first_mismatch',
+        section: 'First Recommendation',
+        message: `Paint parser mismatch: selected first recommendation is "${firstSelected}" but text indicates "${firstMention}".`,
+        suggestion: 'Correct either selected answer or comment text before finalising.'
+      });
+    }
+
+    if (secondSelected && secondMention && secondSelected.toLowerCase() !== secondMention.toLowerCase()) {
+      issues.push({
+        severity: 'error',
+        type: 'paint_parser_second_mismatch',
+        section: 'Second Recommendation',
+        message: `Paint parser mismatch: selected second recommendation is "${secondSelected}" but text indicates "${secondMention}".`,
+        suggestion: 'Correct either selected answer or comment text before finalising.'
+      });
+    }
+  } catch (_e) {}
+}
 function renderResults(report, issues, rawText) {
   const errors = issues.filter(i => i.severity === 'error');
   const warnings = issues.filter(i => i.severity === 'warning');
