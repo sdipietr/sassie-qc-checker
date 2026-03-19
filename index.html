@@ -651,6 +651,59 @@ function extractTopicWords(questionText) {
     .filter(w => w.length > 3 && !stopWords.has(w));
 }
 
+
+
+function detectFirstRecommendationBrandMismatch(report, fullText, issues) {
+  try {
+    const t = fullText || '';
+    const candidates = [
+      ['Accent', /a\.\s*Accent\s*[✓✔✅]/i],
+      ['British Paints', /b\.\s*British\s*Paints[^
+]*[✓✔✅]/i],
+      ['Dulux', /c\.\s*Dulux[^
+]*[✓✔✅]/i],
+      ['Taubmans Endure', /d\.\s*Taubmans\s*Endure[^
+]*[✓✔✅]/i],
+      ['Taubmans Easy Coat', /e\.\s*Taubmans\s*Easy\s*Coat[^
+]*[✓✔✅]/i],
+      ['Porters', /l\.\s*Porters[^
+]*[✓✔✅]/i]
+    ];
+
+    let selected = null;
+    for (const [brand, rx] of candidates) {
+      if (rx.test(t)) { selected = brand; break; }
+    }
+    if (!selected) return;
+
+    const mentions = [
+      ['Dulux', /(?:first\s+recommended|recommended\s+first|first\s+brand)[^\.
+]{0,120}dulux|dulux[^\.
+]{0,120}(?:first\s+recommended|recommended\s+first|first\s+brand)/i],
+      ['Accent', /(?:first\s+recommended|recommended\s+first|first\s+brand)[^\.
+]{0,120}accent|accent[^\.
+]{0,120}(?:first\s+recommended|recommended\s+first|first\s+brand)/i],
+      ['British Paints', /(?:first\s+recommended|recommended\s+first|first\s+brand)[^\.
+]{0,120}british\s*paints|british\s*paints[^\.
+]{0,120}(?:first\s+recommended|recommended\s+first|first\s+brand)/i]
+    ];
+
+    for (const [mentionedBrand, rx] of mentions) {
+      if (rx.test(t) && mentionedBrand.toLowerCase() !== selected.toLowerCase()) {
+        issues.push({
+          severity: 'error',
+          type: 'brand_mismatch',
+          section: 'First Recommendation',
+          message: `First recommended brand mismatch: score selection shows "${selected}" but narrative text references "${mentionedBrand}" as first recommendation.`,
+          suggestion: 'Verify Q3 selected option vs comment text and correct either the answer or the narrative before finalising.'
+        });
+        break;
+      }
+    }
+  } catch (_e) {
+    // fail-safe: do not break audit flow
+  }
+}
 function renderResults(report, issues, rawText) {
   const errors = issues.filter(i => i.severity === 'error');
   const warnings = issues.filter(i => i.severity === 'warning');
