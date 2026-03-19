@@ -756,6 +756,86 @@ function detectPaintRecommendationMismatch(report, fullText, issues) {
     // fail-safe
   }
 }
+
+
+function detectPaintRecommendationMismatchRaw(fullText, issues) {
+  try {
+    const t = fullText || '';
+    if (!/paint\s*shop|paint\s*2025|dulux|taubmans|accent|british\s*paints/i.test(t)) return;
+
+    const brandMap = [
+      ['Accent', /\baccent\b/i],
+      ['British Paints', /british\s*paints/i],
+      ['Dulux', /\bdulux\b/i],
+      ['Taubmans Endure', /taubmans\s*endure/i],
+      ['Taubmans Easy Coat', /taubmans\s*easy\s*coat/i],
+      ['Porters', /\bporters\b/i],
+      ['Wattyl ID', /wattyl\s*id/i],
+      ['Wattyl Solagard', /wattyl\s*solagard/i]
+    ];
+
+    const marker='[✓✔✅☑]';
+
+    function selectedBySection(sectionLabel, stopLabel){
+      const rx = new RegExp(`${sectionLabel}[\\s\\S]*?${stopLabel}`, 'i');
+      const m=t.match(rx); if(!m) return null;
+      const block=m[0];
+      const opts=[
+        ['Accent','a'],['British Paints','b'],['Dulux','c'],['Taubmans Endure','d'],['Taubmans Easy Coat','e'],['Porters','l']
+      ];
+      for (const [name,code] of opts){
+        const r=new RegExp(`${code}\\.\\s*[^\\n\\r]*${marker}`,'i');
+        if(r.test(block)) return name;
+      }
+      return null;
+    }
+
+    function extractExplain(label, stopLabel){
+      const rx=new RegExp(`${label}\\s*Please\\s*explain:\\s*([\\s\\S]*?)${stopLabel}`,'i');
+      const m=t.match(rx);
+      return m ? m[1].trim() : '';
+    }
+
+    const firstSelected = selectedBySection('First\\s+Recommendation','Second\\s+Recommendation|Sentiments|Question\\s*List');
+    const secondSelected = selectedBySection('Second\\s+Recommendation','Sentiments|Question\\s*List|Spot\\s+Questions');
+
+    const firstExplain = extractExplain('3a\\.', '4\\.|Second\\s+Recommendation|Sentiments');
+    const secondExplain = extractExplain('6a\\.', '7\\.|Sentiments|Spot\\s+Questions');
+
+    function mentionBrand(txt){
+      if(!txt) return null;
+      for (const [name,rx] of brandMap){ if(rx.test(txt)) return name; }
+      return null;
+    }
+
+    const firstMention = mentionBrand(firstExplain) || mentionBrand((t.match(/first\s+recommend(?:ed|ation)[^\.\n]{0,180}/i)||[''])[0]);
+    const secondMention = mentionBrand(secondExplain) || mentionBrand((t.match(/second\s+recommend(?:ed|ation|alternative)[^\.\n]{0,180}/i)||[''])[0]);
+
+    if (firstSelected && firstMention && firstSelected.toLowerCase() !== firstMention.toLowerCase()) {
+      issues.push({
+        severity: 'error',
+        type: 'paint_first_recommendation_mismatch_raw',
+        section: 'First Recommendation',
+        message: `Paint mismatch (raw): selected first recommendation is "${firstSelected}" but text references "${firstMention}".`,
+        suggestion: 'Check Q3 selection and 3a/comment text for consistency.'
+      });
+    }
+
+    if (secondSelected && secondMention && secondSelected.toLowerCase() !== secondMention.toLowerCase()) {
+      issues.push({
+        severity: 'error',
+        type: 'paint_second_recommendation_mismatch_raw',
+        section: 'Second Recommendation',
+        message: `Paint mismatch (raw): selected second recommendation is "${secondSelected}" but text references "${secondMention}".`,
+        suggestion: 'Check Q6 selection and 6a/comment text for consistency.'
+      });
+    }
+
+    if (/First\s+Recommendation/i.test(t) && /Second\s+Recommendation/i.test(t) && /Question\s*Parsed\s*0|Questions\s*Parsed\s*0/i.test('')) {
+      // no-op placeholder
+    }
+  } catch (_e) {}
+}
 function renderResults(report, issues, rawText) {
   const errors = issues.filter(i => i.severity === 'error');
   const warnings = issues.filter(i => i.severity === 'warning');
