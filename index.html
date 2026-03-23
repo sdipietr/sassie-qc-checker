@@ -275,7 +275,12 @@ async function processFile(file) {
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    // disableRange + disableStream required for Safari-generated PDFs
+    const pdf = await pdfjsLib.getDocument({
+      data: arrayBuffer,
+      disableRange: true,
+      disableStream: true
+    }).promise;
     let fullText = '';
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
@@ -291,7 +296,7 @@ async function processFile(file) {
       autoCleanGeneralComment(parsed.generalComment.trim());
     }
   } catch (err) {
-    results.innerHTML = `<div class="verdict fail"><div class="verdict-icon">&#9888;</div><div><h3>Error parsing PDF</h3><p>${err.message}. Make sure this is a SASSIE shop review PDF.</p></div></div>`;
+    results.innerHTML = `<div class="verdict fail"><div class="verdict-icon">&#9888;</div><div><h3>Error parsing PDF</h3><p>${err.message}. Make sure this is a SASSIE shop review PDF printed via File → Print → Save as PDF.</p></div></div>`;
     results.style.display = 'block';
   }
   processing.style.display = 'none';
@@ -333,7 +338,6 @@ function parseShopReport(text) {
   if (overallMatch) report.overallScore = parseInt(overallMatch[1]);
 
   // Extract section scores from the score summary
-  // Handles names like "4 Essentials", "Gallery Entrance", etc.
   const sectionScoreRegex = /(\d+)%\s*:?\s*([\dA-Za-z\s&]+?)\s*\((\d+)\/(\d+)\)/g;
   let match;
   while ((match = sectionScoreRegex.exec(text)) !== null) {
@@ -349,11 +353,8 @@ function parseShopReport(text) {
   }
 
   // Extract questions with Yes/No answers and scores
-  // SASSIE PDF format: "1. Question text? 2/2 Yes No" — both Yes and No appear as radio labels
-  // We infer the actual answer from the score: full marks = Yes, 0 = No, partial = ambiguous
   const fullText = text;
 
-  // Pattern: number. question text?  score/total  Yes No
   const qRegex = /(?:^|\s)(\d{1,3}[a-z]?)[\.\)]\s+([A-Z][^?]*\?)\s+(\d+)\/(\d+)\s+Yes\s+No/g;
   while ((match = qRegex.exec(fullText)) !== null) {
     const qNum = match[1];
