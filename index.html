@@ -351,22 +351,17 @@ function parseShopReport(text) {
   // Extract questions with Yes/No answers and scores
   // SASSIE PDF format: "1. Question text? 2/2 Yes No" — both Yes and No appear as radio labels
   // We infer the actual answer from the score: full marks = Yes, 0 = No, partial = ambiguous
-  // First, split into lines for cleaner parsing
-  const lines = text.split(/\n/);
   const fullText = text;
 
   // Pattern: number. question text?  score/total  Yes No
-  // Must start with a digit followed by letter (optional) then period — NOT preceded by % or :
   const qRegex = /(?:^|\s)(\d{1,3}[a-z]?)[\.\)]\s+([A-Z][^?]*\?)\s+(\d+)\/(\d+)\s+Yes\s+No/g;
   while ((match = qRegex.exec(fullText)) !== null) {
     const qNum = match[1];
     const scored = parseInt(match[3]);
     const total = parseInt(match[4]);
 
-    // Skip false positives: question numbers shouldn't be > 100 typically
     if (parseInt(qNum) > 200) continue;
 
-    // Infer answer from score
     let answer;
     if (scored === total) {
       answer = 'Yes';
@@ -376,7 +371,6 @@ function parseShopReport(text) {
       answer = 'Partial';
     }
 
-    // Avoid duplicates
     const existing = report.questions.find(q => q.number === qNum);
     if (!existing) {
       report.questions.push({
@@ -409,47 +403,55 @@ function parseShopReport(text) {
     }
   }
 
-  // Extract General Summary comment
-  // In SASSIE PDFs, the General Summary text always appears right after "UPDATE SURVEY"
-  // This is the most reliable anchor across all questionnaire types
-  const updateSurveyIdx = text.indexOf('UPDATE SURVEY');
-  if (updateSurveyIdx >= 0) {
-    let afterUpdate = text.substring(updateSurveyIdx + 'UPDATE SURVEY'.length).trim();
+  // ── Extract General Comment ──
+  // Primary: find the question/section labeled "General Comments" or "General Summary"
+  // and extract only the text that follows it (the shopper's actual answer).
+  const terminators = [
+    /\b[A-Z]{2,3}\s+\d{1,2}\/\d{1,2}\b/,  // QC staff initials + date e.g. "KC 9/3"
+    /Spell\s*Check/i,
+    /QC\s*Notes/i,
+    /Dear\s+[A-Z]/,
+    /This email is from/i,
+    /Thank you for submitting/i,
+    /UPDATE\s+SURVEY/i
+  ];
 
-    // The comment text runs until QC Notes markers or end-of-content indicators
-    // Common terminators: QC staff initials like "KC 9/3", "MG 9/3", "WB 9/3",
-    // or "Spell Check", or "QC Notes", or email-style content
-    const terminators = [
-      /\b[A-Z]{2,3}\s+\d{1,2}\/\d{1,2}\b/,  // Staff initials + date like "KC 9/3"
-      /Spell\s*Check/i,
-      /QC\s*Notes/i,
-      /Dear\s+[A-Z]/,  // Start of email
-      /This email is from/i,
-      /Thank you for submitting/i
-    ];
-
-    let endIdx = afterUpdate.length;
+  function trimToTerminator(str) {
+    let end = str.length;
     for (const term of terminators) {
-      const termMatch = afterUpdate.match(term);
-      if (termMatch && termMatch.index < endIdx) {
-        endIdx = termMatch.index;
-      }
+      const m = str.match(term);
+      if (m && m.index < end) end = m.index;
     }
-
-    report.generalComment = afterUpdate.substring(0, endIdx).trim();
+    return str.substring(0, end).trim();
   }
 
-  // Fallback: find the longest narrative text block (200+ chars of prose)
+  const gcHeadingMatch = text.match(/\b(?:General\s+Comments?|General\s+Summary)\b\s*\n+([\s\S]*)/i);
+  if (gcHeadingMatch && gcHeadingMatch[1]) {
+    let commentText = trimToTerminator(gcHeadingMatch[1]);
+    // Strip a leading instruction/prompt line if present (e.g. "Please describe your visit today.")
+    const promptLine = commentText.match(/^[^\n]*(?:please|describe|provide|enter|write|give)[^\n]*\n/i);
+    if (promptLine) commentText = commentText.substring(promptLine[0].length).trim();
+    if (commentText.length > 10) report.generalComment = commentText;
+  }
+
+  // Fallback: use the LAST occurrence of "UPDATE SURVEY" as an anchor
+  if (!report.generalComment) {
+    const lastUpdateIdx = text.lastIndexOf('UPDATE SURVEY');
+    if (lastUpdateIdx >= 0) {
+      const afterUpdate = text.substring(lastUpdateIdx + 'UPDATE SURVEY'.length).trim();
+      const candidate = trimToTerminator(afterUpdate);
+      if (candidate.length > 10) report.generalComment = candidate;
+    }
+  }
+
+  // Final fallback: longest narrative text block (200+ chars of prose)
   if (!report.generalComment || report.generalComment.length < 50) {
     const blocks = text.split(/\n\s*\n/);
     const narrativeBlocks = blocks
       .map(b => b.trim())
       .filter(b => b.length > 200 && /[a-z]{3,}.*\.\s/i.test(b))
       .sort((a, b) => b.length - a.length);
-
-    if (narrativeBlocks.length > 0) {
-      report.generalComment = narrativeBlocks[0];
-    }
+    if (narrativeBlocks.length > 0) report.generalComment = narrativeBlocks[0];
   }
 
   return report;
@@ -463,8 +465,6 @@ function checkConsistency(report) {
   const yesAnswers = report.questions.filter(q => q.answer === 'Yes');
 
   // ── CHECK 1: CONTRADICTIONS ──
-  // If the General Summary CLAIMS something positive that a binary answer contradicts, flag it.
-  // This is the real problem — comments saying everything was great when it wasn't.
   const contradictionMap = [
     { keywords: ['badge', 'name badge', 'name tag', 'nametag'], topics: ['badge', 'name badge', 'dressed', 'uniform', 'appearance'] },
     { keywords: ['greeted', 'greeting', 'welcomed', 'acknowledged'], topics: ['greet', 'welcome', 'acknowledg'] },
@@ -483,12 +483,10 @@ function checkConsistency(report) {
     { keywords: ['commitment', 'purchase today', 'close', 'closing'], topics: ['commit', 'purchase today', 'closing'] },
   ];
 
-  // Helper: extract a snippet of surrounding text from the General Summary where a keyword was found
   function extractSnippet(text, keyword, contextChars) {
     contextChars = contextChars || 60;
     const idx = text.toLowerCase().indexOf(keyword.toLowerCase());
     if (idx === -1) return null;
-    // Find sentence boundaries around the match
     const sentenceStart = Math.max(0, text.lastIndexOf('.', idx) + 1);
     const sentenceEnd = text.indexOf('.', idx + keyword.length);
     const start = sentenceStart > 0 ? sentenceStart : Math.max(0, idx - contextChars);
@@ -498,12 +496,9 @@ function checkConsistency(report) {
 
   for (const q of noAnswers) {
     const qTextLower = q.text.toLowerCase();
-
     for (const mapping of contradictionMap) {
       const questionMatchesTopic = mapping.topics.some(t => qTextLower.includes(t));
       if (!questionMatchesTopic) continue;
-
-      // Check if the General Summary positively claims this thing happened
       const matchedKeyword = mapping.keywords.find(k => gc.includes(k.toLowerCase()));
       if (matchedKeyword) {
         const snippet = extractSnippet(report.generalComment || '', matchedKeyword);
@@ -519,15 +514,11 @@ function checkConsistency(report) {
     }
   }
 
-  // Also check the reverse: "Yes" answers contradicted by negative comments
   for (const q of yesAnswers) {
     const qTextLower = q.text.toLowerCase();
-
     for (const mapping of contradictionMap) {
       const questionMatchesTopic = mapping.topics.some(t => qTextLower.includes(t));
       if (!questionMatchesTopic) continue;
-
-      // Check if the General Summary says this DIDN'T happen
       const negativePatterns = mapping.keywords.map(k => `no ${k}|didn't ${k}|did not ${k}|wasn't ${k}|without ${k}|not ${k}|never ${k}|failed to ${k}`);
       const negativeRegex = new RegExp(`(${negativePatterns.join('|')})`, 'i');
       const negMatch = gc.match(negativeRegex);
@@ -546,7 +537,6 @@ function checkConsistency(report) {
   }
 
   // ── CHECK 2: GENERAL SUMMARY TOO SPARSE ──
-  // A proper General Summary should be more than a couple of sentences for a 20+ question shop
   if (gcWordCount > 0 && gcWordCount < 30) {
     issues.push({
       severity: 'error',
@@ -638,12 +628,14 @@ function checkConsistency(report) {
     });
   }
 
+  // ── CHECK 4: PAINT RECOMMENDATION MISMATCHES ──
+  checkPaintRecommendations(report, issues);
+
   return issues;
 }
 
 function extractTopicWords(questionText) {
   const stopWords = new Set(['was','were','the','a','an','did','do','does','all','are','is','you','your','they','their','team','member','members','when','first','have','has','had','been','being','from','this','that','with','for','and','but','not','any','can','could','would','should','into','each','every','how','what','who','where','why','which']);
-
   return questionText
     .toLowerCase()
     .replace(/[^a-z\s]/g, '')
@@ -651,284 +643,151 @@ function extractTopicWords(questionText) {
     .filter(w => w.length > 3 && !stopWords.has(w));
 }
 
+function checkPaintRecommendations(report, issues) {
+  const fullText = report.rawText || '';
 
+  // Only applies to Paint surveys — detected by the presence of the fixed section labels
+  if (!/First\s+Recommendation/i.test(fullText)) return;
 
+  // Brand list in priority order: longer/more specific names first to avoid partial matches
+  const brandList = [
+    ['Taubmans Endure/All Weather', /taubmans\s+endure\s*\/\s*all\s+weather/i],
+    ['Taubmans Endure',            /taubmans\s+endure(?!\s*\/)/i],
+    ['Taubmans Easy Coat',         /taubmans\s+easy\s*coat/i],
+    ['Taubmans Sunproof',          /taubmans\s+sunproof/i],
+    ['Other Taubmans Products',    /other\s+taubmans/i],
+    ['Wattyl Solagard',            /wattyl\s+solagard/i],
+    ['Wattyl ID',                  /wattyl\s+id\b/i],
+    ['Other Wattyl Products',      /other\s+wattyl/i],
+    ['British Paints',             /british\s*paints/i],
+    ['Dulux',                      /\bdulux\b/i],
+    ['Accent',                     /\baccent\b/i],
+    ['Porters',                    /\bporters\b/i],
+  ];
 
+  const checkmarkRx = /[✓✔✅☑]/;
 
+  // Extract the block of text under a section label, stopping at the next section
+  function extractBlock(startRx, stopRx) {
+    const rx = new RegExp(`(?:${startRx})[\\s\\S]*?(?=${stopRx}|$)`, 'i');
+    const m = fullText.match(rx);
+    return m ? m[0] : '';
+  }
 
-function detectPaintRecommendationMismatch(report, fullText, issues) {
-  try {
-    const t = fullText || '';
-    const gc = (report && report.generalComment ? report.generalComment : '') || '';
-    const isPaint = /paint\s*shop|paint\s*2025|dulux|taubmans|accent|british\s*paints/i.test(t);
-    if (!isPaint) return;
-
-    const brandOptions = [
-      ['a', 'Accent'],
-      ['b', 'British Paints'],
-      ['c', 'Dulux'],
-      ['d', 'Taubmans Endure'],
-      ['e', 'Taubmans Easy Coat'],
-      ['f', 'Taubmans Endure/All Weather'],
-      ['g', 'Taubmans Sunproof'],
-      ['h', 'Wattyl ID'],
-      ['i', 'Wattyl Solagard'],
-      ['j', 'Other Wattyl Products'],
-      ['k', 'Other Taubmans Products'],
-      ['l', 'Porters'],
-      ['m', 'A brand not listed'],
-      ['n', 'No recommendation/multiple brands']
-    ];
-
-    const marker = '[✓✔✅☑]';
-
-    function selectedBrand(questionNo, nextNo) {
-      const blockRx = new RegExp(`${questionNo}\\.\\s*What brand[\\s\\S]*?${nextNo}\\.`, 'i');
-      const m = t.match(blockRx);
-      if (!m) return null;
-      const block = m[0];
-      for (const [code, brand] of brandOptions) {
-        const rx = new RegExp(`${code}\\.\\s*[^\\n\\r]*${marker}`, 'i');
-        if (rx.test(block)) return brand;
+  // Find which brand has a checkmark in a section block
+  function getSelectedBrand(block) {
+    if (!block) return null;
+    for (const line of block.split(/[\n\r]+/)) {
+      if (!checkmarkRx.test(line)) continue;
+      for (const [brand, rx] of brandList) {
+        if (rx.test(line)) return brand;
       }
-      return null;
     }
+    return null;
+  }
 
-        function selectedBrandFallback(questionNo, nextLabel) {
-      const m = t.match(new RegExp(`${questionNo}\\.[\\s\\S]*?${nextLabel}`, 'i'));
-      if (!m) return null;
-      const block=m[0];
-      for (const [code, brand] of brandOptions) {
-        const rx = new RegExp(`${code}\\.\\s*[^\\n\\r]*${marker}`, 'i');
-        if (rx.test(block)) return brand;
-      }
-      return null;
+  // Extract the free-text "Please explain" answer from a section block
+  function getExplainText(block) {
+    if (!block) return '';
+    const m = block.match(/[Pp]lease\s+explain\s*:?\s*([\s\S]*?)(?=\n\s*\n|\n\s*[0-9]+\.|\n\s*[A-Z][a-z]|$)/);
+    return m ? m[1].trim() : '';
+  }
+
+  // Return the first brand name found in a text string
+  function findBrand(text) {
+    if (!text) return null;
+    for (const [brand, rx] of brandList) {
+      if (rx.test(text)) return brand;
     }
+    return null;
+  }
 
-    const fs = firstSelected || selectedBrandFallback(3,'3a\\.');
-    const ss = secondSelected || selectedBrandFallback(6,'6a\\.');
+  // Use the fixed section label text — not question numbers, which vary per survey
+  const firstBlock  = extractBlock('First\\s+Recommendation',  'Second\\s+Recommendation');
+  const secondBlock = extractBlock('Second\\s+Recommendation', 'Sentiments|Spot\\s+Questions|General\\s+Comment|Question\\s+List');
 
-    const mentionRules = [
-      ['Dulux', /dulux/i],
-      ['Accent', /accent/i],
-      ['British Paints', /british\s*paints/i],
-      ['Porters', /porters/i],
-      ['Taubmans Endure', /taubmans\s*endure/i],
-      ['Taubmans Easy Coat', /taubmans\s*easy\s*coat/i],
-      ['Taubmans Sunproof', /taubmans\s*sunproof/i],
-      ['Wattyl ID', /wattyl\s*id/i],
-      ['Wattyl Solagard', /wattyl\s*solagard/i]
-    ];
+  const firstSelected  = getSelectedBrand(firstBlock);
+  const secondSelected = getSelectedBrand(secondBlock);
 
-    function mentionedBrand(scopeText, rankWord) {
-      if (!scopeText) return null;
-      const ranked = new RegExp(`${rankWord}[^\\n\\r\\.]{0,120}`, 'i').test(scopeText);
-      if (!ranked) return null;
-      for (const [brand, rx] of mentionRules) {
-        if (rx.test(scopeText)) return brand;
-      }
-      return null;
-    }
+  const firstExplain  = getExplainText(firstBlock);
+  const secondExplain = getExplainText(secondBlock);
 
-    const firstMention = mentionedBrand(gc, 'first');
-    const secondMention = mentionedBrand(gc, 'second|alternative');
+  // ── Check explain text mismatches ──
+  const firstMentioned  = findBrand(firstExplain);
+  const secondMentioned = findBrand(secondExplain);
 
-    if (fs && firstMention && fs.toLowerCase() !== firstMention.toLowerCase()) {
+  if (firstSelected && firstMentioned && firstSelected.toLowerCase() !== firstMentioned.toLowerCase()) {
+    issues.push({
+      severity: 'error',
+      question: 'First Recommendation',
+      questionText: 'Brand mismatch in explanation',
+      answer: `Selected: ${firstSelected}`,
+      problem: `The selected first recommendation is "${firstSelected}" but the explanation text refers to "${firstMentioned}".`
+    });
+  }
+
+  if (secondSelected && secondMentioned && secondSelected.toLowerCase() !== secondMentioned.toLowerCase()) {
+    issues.push({
+      severity: 'error',
+      question: 'Second Recommendation',
+      questionText: 'Brand mismatch in explanation',
+      answer: `Selected: ${secondSelected}`,
+      problem: `The selected second recommendation is "${secondSelected}" but the explanation text refers to "${secondMentioned}".`
+    });
+  }
+
+  // ── Check General Comment for brand mentions ──
+  // For each sentence: determine if it refers to the first or second recommendation,
+  // check for a mismatch, or flag it as ambiguous if context is unclear.
+  const gc = report.generalComment || '';
+  if (!gc) return;
+
+  const sentences = gc.match(/[^.!?]+[.!?]*/g) || [gc];
+  const flaggedBrands = new Set();
+
+  for (const sentence of sentences) {
+    const mentionedBrand = findBrand(sentence);
+    if (!mentionedBrand || flaggedBrands.has(mentionedBrand)) continue;
+
+    const isFirstCtx  = /\b(first|primary|initially|1st)\b/i.test(sentence);
+    const isSecondCtx = /\b(second|secondary|alternative|2nd)\b/i.test(sentence);
+
+    if (isFirstCtx && firstSelected && mentionedBrand.toLowerCase() !== firstSelected.toLowerCase()) {
+      flaggedBrands.add(mentionedBrand);
       issues.push({
         severity: 'error',
-        type: 'paint_first_recommendation_mismatch',
-        section: 'First Recommendation',
-        message: `Paint rule mismatch: Q3 selected "${fs}" but comments indicate first recommendation "${firstMention}".`,
-        suggestion: 'Correct either Q3 selection or narrative text before finalising.'
+        question: 'First Recommendation (General Comment)',
+        questionText: 'Brand mismatch in general comment',
+        answer: `Selected: ${firstSelected}`,
+        problem: `General comment refers to the first recommendation as "${mentionedBrand}" but the selected first recommendation is "${firstSelected}".`
       });
-    }
-
-    if (ss && secondMention && ss.toLowerCase() !== secondMention.toLowerCase()) {
+    } else if (isSecondCtx && secondSelected && mentionedBrand.toLowerCase() !== secondSelected.toLowerCase()) {
+      flaggedBrands.add(mentionedBrand);
       issues.push({
         severity: 'error',
-        type: 'paint_second_recommendation_mismatch',
-        section: 'Second Recommendation',
-        message: `Paint rule mismatch: Q6 selected "${ss}" but comments indicate second recommendation "${secondMention}".`,
-        suggestion: 'Correct either Q6 selection or narrative text before finalising.'
+        question: 'Second Recommendation (General Comment)',
+        questionText: 'Brand mismatch in general comment',
+        answer: `Selected: ${secondSelected}`,
+        problem: `General comment refers to the second recommendation as "${mentionedBrand}" but the selected second recommendation is "${secondSelected}".`
       });
+    } else if (!isFirstCtx && !isSecondCtx) {
+      // Brand mentioned without clear first/second context — flag if it doesn't match either selection
+      const matchesFirst  = firstSelected  && mentionedBrand.toLowerCase() === firstSelected.toLowerCase();
+      const matchesSecond = secondSelected && mentionedBrand.toLowerCase() === secondSelected.toLowerCase();
+      if (!matchesFirst && !matchesSecond) {
+        flaggedBrands.add(mentionedBrand);
+        issues.push({
+          severity: 'warning',
+          question: 'General Comment',
+          questionText: 'Ambiguous brand mention',
+          answer: mentionedBrand,
+          problem: `General comment mentions "${mentionedBrand}" without making clear if this is the first or second recommendation. Selected: First="${firstSelected || '?'}", Second="${secondSelected || '?'}". Please clarify.`
+        });
+      }
     }
-  } catch (_e) {
-    // fail-safe
   }
 }
 
-
-function detectPaintRecommendationMismatchRaw(fullText, issues) {
-  try {
-    const t = fullText || '';
-    if (!/paint\s*shop|paint\s*2025|dulux|taubmans|accent|british\s*paints/i.test(t)) return;
-
-    const brandMap = [
-      ['Accent', /\baccent\b/i],
-      ['British Paints', /british\s*paints/i],
-      ['Dulux', /\bdulux\b/i],
-      ['Taubmans Endure', /taubmans\s*endure/i],
-      ['Taubmans Easy Coat', /taubmans\s*easy\s*coat/i],
-      ['Porters', /\bporters\b/i],
-      ['Wattyl ID', /wattyl\s*id/i],
-      ['Wattyl Solagard', /wattyl\s*solagard/i]
-    ];
-
-    const marker='[✓✔✅☑]';
-
-    function selectedBySection(sectionLabel, stopLabel){
-      const rx = new RegExp(`${sectionLabel}[\\s\\S]*?${stopLabel}`, 'i');
-      const m=t.match(rx); if(!m) return null;
-      const block=m[0];
-      const opts=[
-        ['Accent','a'],['British Paints','b'],['Dulux','c'],['Taubmans Endure','d'],['Taubmans Easy Coat','e'],['Porters','l']
-      ];
-      for (const [name,code] of opts){
-        const r=new RegExp(`${code}\\.\\s*[^\\n\\r]*${marker}`,'i');
-        if(r.test(block)) return name;
-      }
-      return null;
-    }
-
-    function extractExplain(label, stopLabel){
-      const rx=new RegExp(`${label}\\s*Please\\s*explain:\\s*([\\s\\S]*?)${stopLabel}`,'i');
-      const m=t.match(rx);
-      return m ? m[1].trim() : '';
-    }
-
-    const firstSelected = selectedBySection('First\\s+Recommendation','Second\\s+Recommendation|Sentiments|Question\\s*List');
-    const secondSelected = selectedBySection('Second\\s+Recommendation','Sentiments|Question\\s*List|Spot\\s+Questions');
-
-    const firstExplain = extractExplain('3a\\.', '4\\.|Second\\s+Recommendation|Sentiments');
-    const secondExplain = extractExplain('6a\\.', '7\\.|Sentiments|Spot\\s+Questions');
-
-    function mentionBrand(txt){
-      if(!txt) return null;
-      for (const [name,rx] of brandMap){ if(rx.test(txt)) return name; }
-      return null;
-    }
-
-    const firstMention = mentionBrand(firstExplain) || mentionBrand((t.match(/first\s+recommend(?:ed|ation)[^\.\n]{0,180}/i)||[''])[0]);
-    const secondMention = mentionBrand(secondExplain) || mentionBrand((t.match(/second\s+recommend(?:ed|ation|alternative)[^\.\n]{0,180}/i)||[''])[0]);
-
-    if (firstSelected && firstMention && firstSelected.toLowerCase() !== firstMention.toLowerCase()) {
-      issues.push({
-        severity: 'error',
-        type: 'paint_first_recommendation_mismatch_raw',
-        section: 'First Recommendation',
-        message: `Paint mismatch (raw): selected first recommendation is "${firstSelected}" but text references "${firstMention}".`,
-        suggestion: 'Check Q3 selection and 3a/comment text for consistency.'
-      });
-    }
-
-    if (secondSelected && secondMention && secondSelected.toLowerCase() !== secondMention.toLowerCase()) {
-      issues.push({
-        severity: 'error',
-        type: 'paint_second_recommendation_mismatch_raw',
-        section: 'Second Recommendation',
-        message: `Paint mismatch (raw): selected second recommendation is "${secondSelected}" but text references "${secondMention}".`,
-        suggestion: 'Check Q6 selection and 6a/comment text for consistency.'
-      });
-    }
-
-    if (/First\s+Recommendation/i.test(t) && /Second\s+Recommendation/i.test(t) && /Question\s*Parsed\s*0|Questions\s*Parsed\s*0/i.test('')) {
-      // no-op placeholder
-    }
-  } catch (_e) {}
-}
-
-
-function detectPaintTemplateParserEnforced(fullText, issues) {
-  try {
-    const t = fullText || '';
-    // Only run for questionnaires that start with Paint naming
-    if (!/Paint\s*Shop:\s*Paint|\bPaint\s*20\d{2}/i.test(t)) return;
-
-    const marker='[✓✔✅☑]';
-    const options = [
-      ['a','Accent'],
-      ['b','British Paints'],
-      ['c','Dulux'],
-      ['d','Taubmans Endure'],
-      ['e','Taubmans Easy Coat'],
-      ['f','Taubmans Endure/All Weather'],
-      ['g','Taubmans Sunproof'],
-      ['h','Wattyl ID'],
-      ['i','Wattyl Solagard'],
-      ['j','Other Wattyl Products'],
-      ['k','Other Taubmans Products'],
-      ['l','Porters'],
-      ['m','A brand not listed'],
-      ['n','No recommendation/multiple brands']
-    ];
-
-    function sectionBlock(label, stopRegex){
-      const rx = new RegExp(`${label}[\\s\\S]*?${stopRegex}`, 'i');
-      const m = t.match(rx);
-      return m ? m[0] : '';
-    }
-
-    function selectedBrand(block){
-      if(!block) return null;
-      for(const [code, brand] of options){
-        const rx = new RegExp(`${code}\\.\\s*[^\\n\\r]*${marker}`,'i');
-        if(rx.test(block)) return brand;
-      }
-      return null;
-    }
-
-    const firstBlock = sectionBlock('First\\s+Recommendation', 'Second\\s+Recommendation|Sentiments|Question\\s*List');
-    const secondBlock = sectionBlock('Second\\s+Recommendation', 'Sentiments|Spot\\s+Questions|Question\\s*List');
-
-    const firstSelected = selectedBrand(firstBlock);
-    const secondSelected = selectedBrand(secondBlock);
-
-    // Pull narrative snippets likely to contain recommendation wording
-    const explain3 = (t.match(/3a\\.\\s*Please\\s*explain:\\s*([\\s\\S]*?)(?:4\\.|Second\\s+Recommendation|Sentiments)/i)||[])[1] || '';
-    const explain6 = (t.match(/6a\\.\\s*Please\\s*explain:\\s*([\\s\\S]*?)(?:7\\.|Sentiments|Spot\\s+Questions)/i)||[])[1] || '';
-
-    const brandMentions = [
-      ['Dulux', /\bdulux\b/i],
-      ['Accent', /\baccent\b/i],
-      ['British Paints', /british\s*paints/i],
-      ['Porters', /\bporters\b/i],
-      ['Taubmans Endure', /taubmans\s*endure/i],
-      ['Taubmans Easy Coat', /taubmans\s*easy\s*coat/i],
-      ['Taubmans Sunproof', /taubmans\s*sunproof/i],
-      ['Wattyl ID', /wattyl\s*id/i],
-      ['Wattyl Solagard', /wattyl\s*solagard/i],
-    ];
-
-    function firstBrandMention(txt){
-      if(!txt) return null;
-      for (const [b,rx] of brandMentions){ if(rx.test(txt)) return b; }
-      return null;
-    }
-
-    const firstMention = firstBrandMention(explain3) || firstBrandMention((t.match(/first\s+recommend(?:ed|ation)[^\.\n]{0,220}/i)||[])[0] || '');
-    const secondMention = firstBrandMention(explain6) || firstBrandMention((t.match(/second\s+recommend(?:ed|ation|alternative)[^\.\n]{0,220}/i)||[])[0] || '');
-
-    if (firstSelected && firstMention && firstSelected.toLowerCase() !== firstMention.toLowerCase()) {
-      issues.push({
-        severity: 'error',
-        type: 'paint_parser_first_mismatch',
-        section: 'First Recommendation',
-        message: `Paint parser mismatch: selected first recommendation is "${firstSelected}" but text indicates "${firstMention}".`,
-        suggestion: 'Correct either selected answer or comment text before finalising.'
-      });
-    }
-
-    if (secondSelected && secondMention && secondSelected.toLowerCase() !== secondMention.toLowerCase()) {
-      issues.push({
-        severity: 'error',
-        type: 'paint_parser_second_mismatch',
-        section: 'Second Recommendation',
-        message: `Paint parser mismatch: selected second recommendation is "${secondSelected}" but text indicates "${secondMention}".`,
-        suggestion: 'Correct either selected answer or comment text before finalising.'
-      });
-    }
-  } catch (_e) {}
-}
 function renderResults(report, issues, rawText) {
   const errors = issues.filter(i => i.severity === 'error');
   const warnings = issues.filter(i => i.severity === 'warning');
