@@ -407,17 +407,22 @@ function parseShopReport(text, pages) {
   }
 
   // ── Brand detection ──
-  // Use indexOf with a fromIndex so section boundaries are found AFTER the section start,
-  // not from the top of the document (where section names also appear in the score header).
+  // Section names appear twice: once in the score header (no score attached)
+  // and once as body section headers ("First Recommendation 41% (28/68)").
+  // We must find the BODY versions only, so we match "Name XX% (YY/ZZ)" format.
+  function findBodySection(haystack, sectionName) {
+    const escaped = sectionName.replace(/[()\/]/g, c => '\\' + c);
+    const m = new RegExp(escaped + '\\s+\\d+%\\s*\\(\\d+\\/\\d+\\)').exec(haystack);
+    return m ? m.index : -1;
+  }
+
   function indexAfter(haystack, needle, from) {
     const idx = haystack.indexOf(needle, from);
     return idx !== -1 ? idx : haystack.length;
   }
 
-  const firstRecStart  = text.indexOf('First Recommendation');
-  const secondRecStart = firstRecStart !== -1
-    ? text.indexOf('Second Recommendation', firstRecStart + 1)
-    : text.indexOf('Second Recommendation');
+  const firstRecStart  = findBodySection(text, 'First Recommendation');
+  const secondRecStart = findBodySection(text, 'Second Recommendation');
   const sentStart      = secondRecStart !== -1
     ? indexAfter(text, 'Sentiments', secondRecStart + 1)
     : indexAfter(text, 'Sentiments', 0);
