@@ -22,8 +22,6 @@
     --yellow: #eab308;
     --yellow-bg: rgba(234,179,8,0.12);
     --orange: #f97316;
-    --purple: #a78bfa;
-    --purple-bg: rgba(167,139,250,0.12);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -133,25 +131,19 @@
   }
   .section-card.open .section-body { display: block; }
 
-  .question-row {
+  .answer-row {
     padding: 0.5rem 0;
     border-bottom: 1px solid rgba(71,85,105,0.3);
     font-size: 0.88rem;
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
   }
-  .question-row:last-child { border-bottom: none; }
-  .q-label { color: var(--text-muted); font-size: 0.8rem; }
-  .q-answer { margin-top: 0.15rem; }
-  .q-answer.yes { color: var(--green); }
-  .q-answer.no { color: var(--red); font-weight: 600; }
-  .q-comment {
-    background: var(--bg);
-    padding: 0.6rem 0.85rem;
-    border-radius: 6px;
-    margin-top: 0.35rem;
-    font-size: 0.84rem;
-    color: var(--text-muted);
-    white-space: pre-wrap;
-  }
+  .answer-row:last-child { border-bottom: none; }
+  .answer-label { color: var(--text-muted); font-size: 0.8rem; min-width: 80px; }
+  .answer-value { color: var(--text); }
+  .answer-value.yes { color: var(--green); font-weight: 600; }
+  .answer-value.no { color: var(--red); font-weight: 600; }
 
   .issues-list { margin-bottom: 1.5rem; }
   .issue-card {
@@ -163,30 +155,9 @@
   }
   .issue-card.warning { border-left-color: var(--yellow); }
   .issue-card.info { border-left-color: var(--accent); background: rgba(59,130,246,0.08); }
-  .issue-card.ai-issue { border-left-color: var(--purple); background: var(--purple-bg); }
   .issue-card h4 { font-size: 0.95rem; margin-bottom: 0.5rem; }
   .issue-detail { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem; }
   .issue-detail strong { color: var(--text); }
-
-  .ai-badge {
-    display: inline-block;
-    background: rgba(167,139,250,0.2);
-    color: var(--purple);
-    font-size: 0.68rem;
-    padding: 0.1rem 0.45rem;
-    border-radius: 4px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    vertical-align: middle;
-    margin-left: 0.4rem;
-  }
-  #aiIssuesSection { margin-top: 0.25rem; }
-  #aiCheckStatus {
-    color: var(--text-muted);
-    font-size: 0.82rem;
-    margin-bottom: 0.75rem;
-    font-style: italic;
-  }
 
   button.btn {
     background: var(--accent);
@@ -231,33 +202,41 @@
   .stat-value { font-size: 1.5rem; font-weight: 700; }
   .stat-label { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
 
-  .cleaner-box {
-    background: var(--surface);
+  .q-comment {
+    background: var(--bg);
+    padding: 0.6rem 0.85rem;
+    border-radius: 6px;
+    margin-top: 0.35rem;
+    font-size: 0.84rem;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+  }
+
+  .format-warning {
+    background: rgba(234,179,8,0.1);
+    border: 1px solid var(--yellow);
     border-radius: 10px;
     padding: 1rem 1.25rem;
-    margin-top: 1rem;
-    border: 1px solid var(--surface2);
+    margin-bottom: 1.5rem;
+    font-size: 0.88rem;
+    color: var(--yellow);
   }
-  .cleaner-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-  .cleaner-col h4 { font-size: 0.9rem; margin-bottom: 0.35rem; color: var(--text-muted); }
-  .cleaner-text { background: var(--bg); border-radius: 8px; padding: 0.75rem; white-space: pre-wrap; font-size: 0.88rem; }
-  .cleaner-actions { margin-top: 0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap; }
-  .muted { color: var(--text-muted); font-size: 0.82rem; }
+  .format-warning strong { display: block; margin-bottom: 0.25rem; font-size: 0.95rem; }
 </style>
 </head>
 <body>
 <div class="container">
   <header>
     <h1>SASSIE QC Checker</h1>
-    <p>Service Integrity — Upload a shop report PDF for consistency analysis</p>
+    <p>Service Integrity — Upload the shopper DSV PDF for consistency analysis</p>
   </header>
 
   <div id="uploadZone" class="upload-zone">
     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.5">
       <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
     </svg>
-    <h3>Drop SASSIE PDF here or click to upload</h3>
-    <p>Print the shop review page to PDF, then upload it here</p>
+    <h3>Drop SASSIE DSV PDF here or click to upload</h3>
+    <p>Use the shopper report PDF (filename starts with "dsv_"), not the admin review PDF</p>
     <input type="file" id="fileInput" accept=".pdf">
   </div>
 
@@ -270,6 +249,9 @@
 </div>
 
 <script>
+// The character SASSIE uses to mark selected checkboxes/radio buttons
+const CHECKED = '\ue61d';
+
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 const uploadZone = document.getElementById('uploadZone');
@@ -277,126 +259,6 @@ const fileInput  = document.getElementById('fileInput');
 const processing = document.getElementById('processing');
 const results    = document.getElementById('results');
 
-const CLEANER_API     = window.CLEANER_API     || '/api/clean-comments';
-const CONSISTENCY_API = window.CONSISTENCY_API || '/api/check-consistency';
-
-// ── Client rules (loaded from rules.json served by the backend) ───────────────
-let clientRules = null; // null = not yet attempted
-
-async function ensureRulesLoaded() {
-  if (clientRules !== null) return;
-  try {
-    const res = await fetch('/rules.json');
-    clientRules = res.ok ? ((await res.json()).clients || []) : [];
-  } catch (_) {
-    clientRules = [];
-  }
-}
-
-function evaluateRule(rule, report) {
-  const gc = (report.generalComment || '').toLowerCase();
-  const c  = rule.conditions || {};
-
-  if (c.comment_contains_any) {
-    if (!c.comment_contains_any.some(p => gc.includes(p.toLowerCase()))) return false;
-  }
-  if (c.comment_contains_all) {
-    if (!c.comment_contains_all.every(p => gc.includes(p.toLowerCase()))) return false;
-  }
-  if (c.section_score_is_zero) {
-    const sn  = c.section_score_is_zero.toLowerCase();
-    const sec = report.sections.find(s => s.name.toLowerCase().includes(sn));
-    if (!sec || sec.scored !== 0) return false;
-  }
-  if (c.question_text_contains && c.answer_is) {
-    const kw = c.question_text_contains.toLowerCase();
-    const q  = report.questions.find(q => q.text.toLowerCase().includes(kw));
-    if (!q || q.answer.toLowerCase() !== c.answer_is.toLowerCase()) return false;
-  }
-  return true;
-}
-
-function applyClientRules(report, issues) {
-  if (!clientRules || !clientRules.length) return;
-  // Detect client from survey name + first 300 chars of raw text
-  const surveyText = (report.client + ' ' + report.rawText.substring(0, 300)).toLowerCase();
-  for (const client of clientRules) {
-    if (!surveyText.includes(client.detect.toLowerCase())) continue;
-    for (const rule of (client.rules || [])) {
-      if (evaluateRule(rule, report)) {
-        issues.push({
-          severity:     rule.severity || 'warning',
-          question:     'Client Rule',
-          questionText: rule.description,
-          answer:       '—',
-          problem:      rule.message
-        });
-      }
-    }
-  }
-}
-
-// ── AI consistency check (runs after initial render, non-blocking) ────────────
-async function aiCheckConsistency(report) {
-  if (!report.questions.length || !report.generalComment) return [];
-  try {
-    const questionsText = report.questions
-      .map(q => `Q${q.number}: ${q.text} — ${q.answer} (${q.scored}/${q.total})`)
-      .join('\n');
-    const res = await fetch(CONSISTENCY_API, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        client:         report.client,
-        questions:      questionsText,
-        generalComment: report.generalComment
-      })
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.issues || []).map(i => ({
-      severity:     i.severity     || 'warning',
-      question:     i.question     || 'AI Check',
-      questionText: i.questionText || 'Inconsistency detected',
-      answer:       '—',
-      problem:      i.problem      || ''
-    }));
-  } catch (_) {
-    return [];
-  }
-}
-
-function appendAIIssues(aiIssues) {
-  const existing = document.getElementById('aiIssuesSection');
-  if (existing) existing.remove();
-
-  const statusEl = document.getElementById('aiCheckStatus');
-  if (statusEl) {
-    statusEl.textContent = aiIssues.length
-      ? `AI check complete — ${aiIssues.length} additional item${aiIssues.length > 1 ? 's' : ''} flagged.`
-      : 'AI check complete — no additional issues found.';
-  }
-
-  if (!aiIssues.length) return;
-
-  let html = `<div id="aiIssuesSection">
-    <h3 style="margin-bottom:0.75rem;font-size:1rem;">AI Consistency Check <span class="ai-badge">AI</span></h3>
-    <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem;">These are AI opinions, not confirmed errors. Use your judgement.</p>
-    <div class="issues-list">`;
-  for (const issue of aiIssues) {
-    const cardClass = issue.severity === 'error' ? 'ai-issue' : 'ai-issue warning';
-    html += `<div class="issue-card ${cardClass}">
-      <h4>${escapeHtml(issue.question)}: ${escapeHtml(issue.questionText)} <span class="ai-badge">AI</span></h4>
-      <div class="issue-detail"><strong>Problem:</strong> ${escapeHtml(issue.problem)}</div>
-    </div>`;
-  }
-  html += `</div></div>`;
-
-  const resetBar = document.querySelector('.reset-bar');
-  if (resetBar) resetBar.insertAdjacentHTML('beforebegin', html);
-}
-
-// ── File processing ───────────────────────────────────────────────────────────
 uploadZone.addEventListener('click', () => fileInput.click());
 uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
@@ -410,481 +272,487 @@ fileInput.addEventListener('change', e => { if (e.target.files[0]) processFile(e
 async function processFile(file) {
   uploadZone.style.display = 'none';
   processing.style.display = 'block';
-  results.style.display    = 'none';
+  results.style.display = 'none';
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    // disableRange + disableStream required for Safari-generated PDFs
-    const pdf = await pdfjsLib.getDocument({
-      data:          arrayBuffer,
-      disableRange:  true,
-      disableStream: true
-    }).promise;
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
+    let pages = [];
     let fullText = '';
     for (let i = 1; i <= pdf.numPages; i++) {
       const page    = await pdf.getPage(i);
       const content = await page.getTextContent();
-      fullText += content.items.map(item => item.str).join(' ') + '\n';
+      const pageText = content.items.map(item => item.str).join(' ');
+      pages.push(pageText);
+      fullText += pageText + '\n';
     }
 
-    await ensureRulesLoaded();
-    const parsed = parseShopReport(fullText);
+    const parsed = parseShopReport(fullText, pages);
     const issues = checkConsistency(parsed);
-    applyClientRules(parsed, issues);
-
-    // Render immediately with algorithm + rules issues
-    renderResults(parsed, issues, fullText);
-
-    // Non-blocking: comment cleaning + AI consistency check run in parallel
-    if (parsed.generalComment && parsed.generalComment.trim().length > 0) {
-      autoCleanGeneralComment(parsed.generalComment.trim());
-    }
-    aiCheckConsistency(parsed).then(aiIssues => appendAIIssues(aiIssues));
-
+    renderResults(parsed, issues);
   } catch (err) {
-    results.innerHTML = `<div class="verdict fail"><div class="verdict-icon">&#9888;</div><div><h3>Error parsing PDF</h3><p>${err.message}. Make sure this is a SASSIE shop review PDF printed via File &rarr; Print &rarr; Save as PDF.</p></div></div>`;
+    results.innerHTML = `<div class="verdict fail">
+      <div class="verdict-icon">&#9888;</div>
+      <div><h3>Error parsing PDF</h3><p>${escapeHtml(err.message)}</p></div>
+    </div>`;
     results.style.display = 'block';
   }
   processing.style.display = 'none';
 }
 
-// ── Report parser ─────────────────────────────────────────────────────────────
-function parseShopReport(text) {
+// ── BRAND LIST ──────────────────────────────────────────────────────────────
+const BRANDS = [
+  'Dulux', 'Accent', 'British Paints', 'Taubmans Endure', 'Taubmans Easy Coat',
+  'Taubmans Endure/All Weather', 'Taubmans Sunproof', 'Wattyl ID', 'Wattyl Solagard',
+  'Other Wattyl Products', 'Other Taubmans Products', 'Porters'
+];
+
+// ── PARSER ──────────────────────────────────────────────────────────────────
+function parseShopReport(text, pages) {
   const report = {
-    shopRef: '', client: '', location: '', shopDate: '', shopper: '',
-    overallScore: 0, sections: [], questions: [], generalComment: '', rawText: text
+    shopRef:        '',
+    client:         '',
+    location:       '',
+    shopDate:       '',
+    isDSV:          false,
+    overallScore:   null,
+    sections:       [],
+    firstBrand:     '',
+    secondBrand:    '',
+    q2:             null,   // Did staff ask questions?
+    q11:            null,   // Pre-tinned mentioned?
+    q11a:           null,   // Alternative colour suggested?
+    firstReasons:   [],
+    secondReasons:  [],
+    generalComment: '',
+    rawText:        text
   };
 
+  // Detect DSV format
+  report.isDSV = text.includes('YOUR SCORE INFORMATION') || text.includes(CHECKED);
+
+  // ── Metadata ──
   const refMatch = text.match(/Shop Ref#:\s*(\d+)/i);
   if (refMatch) report.shopRef = refMatch[1];
 
-  const dateMatch = text.match(/Shop Date:\s*([\d\/\-]+)/i);
+  const dateMatch = text.match(/Shop Date:\s*([\d\/]+)/i) ||
+                    text.match(/Report Date\s+([\d\/]+)/i);
   if (dateMatch) report.shopDate = dateMatch[1];
 
-  const shopperMatch = text.match(/Shopper\s*#\d+:\s*([A-Za-z\s]+?)(?:\s*Shopper Phone|$)/i);
-  if (shopperMatch) report.shopper = shopperMatch[1].trim();
+  // Client: "246556 Paint Shop: Paint 2025/2026"
+  const clientMatch = text.match(/\d{5,6}\s+([\w][\w\s:\/&\-]+?)(?=\s{2,}|\n|Location)/);
+  if (clientMatch) report.client = clientMatch[1].trim();
 
-  const titleMatch = text.match(/([A-Za-z\s&']+(?:Store|Shop|Visit|Mystery|Audit|Survey|Assessment)[^\n]*\d{4})/i);
-  if (titleMatch) report.client = titleMatch[1].trim();
+  // Location: first "BMS ..." or similar store name line
+  const locMatch = text.match(/Location\s*\n([^\n]+)/i) ||
+                   text.match(/(BMS\s+[\w\s]+(?:\d{6})?)/);
+  if (locMatch) report.location = (locMatch[1] || locMatch[0]).trim().replace(/\s+/g, ' ');
 
-  const locationMatch = text.match(/Location:\s*([^\n(]+)/i);
-  if (locationMatch) report.location = locationMatch[1].trim();
+  // Overall score
+  const scoreMatch = text.match(/(\d+)%\s*:?\s*Overall\s*Score/i);
+  if (scoreMatch) report.overallScore = parseInt(scoreMatch[1]);
 
-  const overallMatch = text.match(/(\d+)%\s*:?\s*Overall\s*Score/i) || text.match(/Overall\s*Score[^0-9]*(\d+)%/i);
-  if (overallMatch) report.overallScore = parseInt(overallMatch[1]);
-
-  const sectionScoreRegex = /(\d+)%\s*:?\s*([\dA-Za-z\s&]+?)\s*\((\d+)\/(\d+)\)/g;
-  let match;
-  while ((match = sectionScoreRegex.exec(text)) !== null) {
-    const name = match[2].trim();
-    if (name.toLowerCase() !== 'overall score') {
-      report.sections.push({ name, percentage: parseInt(match[1]), scored: parseInt(match[3]), total: parseInt(match[4]) });
+  // ── Section scores ──
+  // Patterns like: "First Recommendation 41% (28/68)"
+  const sectionRegex = /(First Recommendation|Second Recommendation|Sentiments|Assistance|Spot Questions)\s+(\d+)%\s*\((\d+)\/(\d+)\)/gi;
+  let m;
+  while ((m = sectionRegex.exec(text)) !== null) {
+    report.sections.push({
+      name:       m[1].trim(),
+      percentage: parseInt(m[2]),
+      scored:     parseInt(m[3]),
+      total:      parseInt(m[4])
+    });
+  }
+  // Also catch "41% (28/68)" style from header
+  const altSectionRegex = /(\d+)%\s*\((\d+)\/(\d+)\)\s*(?::?\s*)?(First Recommendation|Second Recommendation|Sentiments)/gi;
+  while ((m = altSectionRegex.exec(text)) !== null) {
+    if (!report.sections.find(s => s.name.toLowerCase() === m[4].toLowerCase())) {
+      report.sections.push({
+        name:       m[4].trim(),
+        percentage: parseInt(m[1]),
+        scored:     parseInt(m[2]),
+        total:      parseInt(m[3])
+      });
     }
   }
 
-  const qRegex = /(?:^|\s)(\d{1,3}[a-z]?)[\.\)]\s+([A-Z][^?]*\?)\s+(\d+)\/(\d+)\s+Yes\s+No/g;
-  while ((match = qRegex.exec(text)) !== null) {
-    const qNum = match[1];
-    if (parseInt(qNum) > 200) continue;
-    const scored = parseInt(match[3]), total = parseInt(match[4]);
-    const answer = scored === total ? 'Yes' : scored === 0 ? 'No' : 'Partial';
-    if (!report.questions.find(q => q.number === qNum)) {
-      report.questions.push({ number: qNum, text: match[2].trim(), scored, total, answer, comment: '' });
+  // ── Detect selected answers (lines containing CHECKED) ──
+  const lines = text.split('\n');
+
+  // Q2: Did staff ask questions?
+  for (let i = 0; i < lines.length; i++) {
+    if (/staff member ask questions/i.test(lines[i])) {
+      const context = lines.slice(i, i + 4).join(' ');
+      if (/Yes\s*\ue61d/.test(context)) report.q2 = 'Yes';
+      else if (/No\s*\ue61d/.test(context)) report.q2 = 'No';
+      break;
     }
   }
 
-  const qRegexNA = /(?:^|\s)(\d{1,3}[a-z]?)[\.\)]\s+([A-Z][^?]*\?)\s+(\d+)\/(\d+)\s+Yes\s+No\s+N\/A/g;
-  while ((match = qRegexNA.exec(text)) !== null) {
-    const qNum = match[1];
-    if (!report.questions.find(q => q.number === qNum)) {
-      const scored = parseInt(match[3]), total = parseInt(match[4]);
-      report.questions.push({ number: qNum, text: match[2].trim(), scored, total, answer: scored === total ? 'Yes' : scored === 0 ? 'No' : 'Partial', comment: '' });
+  // Q11: Pre-tinned mentioned?
+  for (let i = 0; i < lines.length; i++) {
+    if (/pre-tinned/i.test(lines[i])) {
+      const context = lines.slice(i, i + 3).join(' ');
+      if (/Yes\s*\ue61d/.test(context)) report.q11 = 'Yes';
+      else if (/No\s*\ue61d/.test(context)) report.q11 = 'No';
+      // Q11a is the next Yes/No block
+      const context11a = lines.slice(i + 1, i + 6).join(' ');
+      const afterYes = context11a.replace(/Yes\s*\ue61d/, ''); // remove Q11 yes if present
+      if (/No\s*\ue61d/.test(afterYes)) report.q11a = 'No';
+      else if (/Yes\s*\ue61d/.test(afterYes)) report.q11a = 'Yes';
+      break;
     }
   }
 
-  // ── Extract General Comment ──
-  const terminators = [
-    /\b[A-Z]{2,3}\s+\d{1,2}\/\d{1,2}\b/,
-    /Spell\s*Check/i, /QC\s*Notes/i, /Dear\s+[A-Z]/,
-    /This email is from/i, /Thank you for submitting/i, /UPDATE\s+SURVEY/i
-  ];
-  function trimToTerminator(str) {
-    let end = str.length;
-    for (const term of terminators) { const m = str.match(term); if (m && m.index < end) end = m.index; }
-    return str.substring(0, end).trim();
+  // ── Brand detection ──
+  // Use indexOf with a fromIndex so section boundaries are found AFTER the section start,
+  // not from the top of the document (where section names also appear in the score header).
+  function indexAfter(haystack, needle, from) {
+    const idx = haystack.indexOf(needle, from);
+    return idx !== -1 ? idx : haystack.length;
   }
 
-  const gcHeadingMatch = text.match(/\b(?:General\s+Comments?|General\s+Summary)\b\s*\n+([\s\S]*)/i);
-  if (gcHeadingMatch && gcHeadingMatch[1]) {
-    let commentText = trimToTerminator(gcHeadingMatch[1]);
-    const promptLine = commentText.match(/^[^\n]*(?:please|describe|provide|enter|write|give)[^\n]*\n/i);
-    if (promptLine) commentText = commentText.substring(promptLine[0].length).trim();
-    if (commentText.length > 10) report.generalComment = commentText;
-  }
+  const firstRecStart  = text.indexOf('First Recommendation');
+  const secondRecStart = firstRecStart !== -1
+    ? text.indexOf('Second Recommendation', firstRecStart + 1)
+    : text.indexOf('Second Recommendation');
+  const sentStart      = secondRecStart !== -1
+    ? indexAfter(text, 'Sentiments', secondRecStart + 1)
+    : indexAfter(text, 'Sentiments', 0);
+  const gcStart        = text.indexOf('General Comments');
 
-  if (!report.generalComment) {
-    const lastUpdateIdx = text.lastIndexOf('UPDATE SURVEY');
-    if (lastUpdateIdx >= 0) {
-      const candidate = trimToTerminator(text.substring(lastUpdateIdx + 'UPDATE SURVEY'.length).trim());
-      if (candidate.length > 10) report.generalComment = candidate;
+  function findCheckedBrand(sectionText) {
+    for (const brand of BRANDS) {
+      // Escape regex special chars in brand name
+      const escaped = brand.replace(/[()\/]/g, c => '\\' + c);
+      // Allow up to 100 chars between brand name and CHECKED — needed for long option
+      // text like "Other Taubmans Products (not Endure, EasyCoat, Sunproof or All Weather)"
+      if (new RegExp(escaped + '.{0,100}\ue61d', 's').test(sectionText)) {
+        return brand;
+      }
     }
+    return '';
   }
 
-  if (!report.generalComment || report.generalComment.length < 50) {
-    const narrativeBlocks = text.split(/\n\s*\n/).map(b => b.trim())
-      .filter(b => b.length > 200 && /[a-z]{3,}.*\.\s/i.test(b))
-      .sort((a, b) => b.length - a.length);
-    if (narrativeBlocks.length > 0) report.generalComment = narrativeBlocks[0];
+  if (firstRecStart !== -1) {
+    const end = secondRecStart < text.length ? secondRecStart : text.length;
+    report.firstBrand = findCheckedBrand(text.substring(firstRecStart, end));
+  }
+
+  if (secondRecStart !== -1 && secondRecStart < text.length) {
+    report.secondBrand = findCheckedBrand(text.substring(secondRecStart, sentStart));
+  }
+
+  // ── General Comment ──
+  if (gcStart !== -1) {
+    const qcIdx = text.indexOf('QC Notes', gcStart);
+    let gc = text.substring(gcStart + 'General Comments'.length,
+                            qcIdx !== -1 ? qcIdx : text.length);
+    // Strip instruction text
+    gc = gc.replace(/You MUST answer[\s\S]*?brand recommendations\./i, '').trim();
+    gc = gc.replace(/Spell Check/gi, '').trim();
+    report.generalComment = gc;
   }
 
   return report;
 }
 
-// ── Consistency checks (algorithm) ───────────────────────────────────────────
+// ── CONSISTENCY CHECKS ──────────────────────────────────────────────────────
 function checkConsistency(report) {
   const issues = [];
   const gc = (report.generalComment || '').toLowerCase();
-  const gcWordCount = gc.split(/\s+/).filter(w => w.length > 0).length;
-  const noAnswers  = report.questions.filter(q => q.answer === 'No');
-  const yesAnswers = report.questions.filter(q => q.answer === 'Yes');
+  const gcWords = gc.split(/\s+/).filter(w => w.length > 0).length;
 
-  const contradictionMap = [
-    { keywords: ['badge', 'name badge', 'name tag', 'nametag'],           topics: ['badge', 'name badge', 'dressed', 'uniform', 'appearance'] },
-    { keywords: ['greeted', 'greeting', 'welcomed', 'acknowledged'],       topics: ['greet', 'welcome', 'acknowledg'] },
-    { keywords: ['clean', 'tidy', 'presentable', 'well-maintained'],       topics: ['clean', 'tidy', 'presentab', 'exterior'] },
-    { keywords: ['approached', 'came up to', 'came over'],                 topics: ['approach', 'came up', 'came over'] },
-    { keywords: ['professional', 'dressed well', 'well-dressed', 'uniform'], topics: ['dress', 'professional', 'uniform', 'appearance'] },
-    { keywords: ['quote', 'pricing', 'price'],                             topics: ['quote', 'pricing', 'price'] },
-    { keywords: ['farewell', 'goodbye', 'parting'],                        topics: ['farewell', 'goodbye', 'parting'] },
-    { keywords: ['features', 'benefits', 'demonstrated'],                  topics: ['feature', 'benefit', 'demonstrat'] },
-    { keywords: ['additional products', 'add-on', 'addon', 'upsell', 'suggested additional'], topics: ['additional', 'add-on', 'addon', 'upsell', 'enhance the sale'] },
-    { keywords: ['objection', 'concern', 'handled'],                       topics: ['objection', 'concern', 'handled'] },
-    { keywords: ['music', 'playing'],                                      topics: ['music'] },
-    { keywords: ['promotional', 'banner', 'poster', 'display'],            topics: ['promoti', 'banner', 'poster'] },
-    { keywords: ['call back', 'follow up', 'callback'],                    topics: ['call back', 'follow up', 'follow-up'] },
-    { keywords: ['online portal', 'convert online'],                       topics: ['portal', 'online'] },
-    { keywords: ['commitment', 'purchase today', 'close', 'closing'],      topics: ['commit', 'purchase today', 'closing'] },
-  ];
-
-  function extractSnippet(text, keyword, contextChars = 60) {
-    const idx = text.toLowerCase().indexOf(keyword.toLowerCase());
-    if (idx === -1) return null;
-    const sentenceStart = Math.max(0, text.lastIndexOf('.', idx) + 1);
-    const sentenceEnd   = text.indexOf('.', idx + keyword.length);
-    const start = sentenceStart > 0 ? sentenceStart : Math.max(0, idx - contextChars);
-    const end   = sentenceEnd   > 0 ? Math.min(text.length, sentenceEnd + 1) : Math.min(text.length, idx + keyword.length + contextChars);
-    return text.substring(start, end).trim();
+  // ── CHECK 1: First brand vs General Comment ──
+  // If a brand was selected in Q3, the comment should mention it
+  if (report.firstBrand) {
+    const brandKey = report.firstBrand.split(' ')[0].toLowerCase(); // e.g. "dulux", "accent"
+    if (!gc.includes(brandKey)) {
+      issues.push({
+        severity: 'error',
+        title: 'First brand not mentioned in comment',
+        detail: `Q3 has <strong>${report.firstBrand}</strong> selected as the first recommendation, but the General Comment does not mention this brand. Check that the correct brand was ticked.`
+      });
+    }
   }
 
-  for (const q of noAnswers) {
-    const qTextLower = q.text.toLowerCase();
-    for (const mapping of contradictionMap) {
-      if (!mapping.topics.some(t => qTextLower.includes(t))) continue;
-      const matchedKeyword = mapping.keywords.find(k => gc.includes(k.toLowerCase()));
-      if (matchedKeyword) {
-        const snippet   = extractSnippet(report.generalComment || '', matchedKeyword);
-        const quotePart = snippet ? `\n\nThe General Summary says: "${snippet}"` : '';
-        issues.push({ severity: 'error', question: `Q${q.number}`, questionText: q.text, answer: `No — ${q.scored}/${q.total}`, problem: `The binary answer is "No" (${q.scored}/${q.total}) but the General Summary claims otherwise.${quotePart}` });
+  // ── CHECK 2: Comment mentions a brand as first rec that doesn't match Q3 ──
+  if (report.firstBrand) {
+    const brandKey = report.firstBrand.split(' ')[0].toLowerCase();
+    // Look for other brands mentioned as "first" or "best" in comment
+    for (const brand of BRANDS) {
+      const key = brand.split(' ')[0].toLowerCase();
+      if (key === brandKey) continue;
+      // If another brand is described as first/best/recommended in comment
+      if (gc.includes(key) && /first|best|recommend/i.test(gc)) {
+        const idx = gc.indexOf(key);
+        const snippet = gc.substring(Math.max(0, idx - 40), idx + 60);
+        if (/best|first|recommend/i.test(snippet)) {
+          issues.push({
+            severity: 'warning',
+            title: 'Comment references different brand as primary',
+            detail: `Q3 shows <strong>${report.firstBrand}</strong> selected, but the General Comment appears to describe <strong>${brand}</strong> as the best/first recommendation. Verify the brand selection is correct.`
+          });
+          break;
+        }
       }
     }
   }
 
-  for (const q of yesAnswers) {
-    const qTextLower = q.text.toLowerCase();
-    for (const mapping of contradictionMap) {
-      if (!mapping.topics.some(t => qTextLower.includes(t))) continue;
-      const negPatterns = mapping.keywords.map(k => `no ${k}|didn't ${k}|did not ${k}|wasn't ${k}|without ${k}|not ${k}|never ${k}|failed to ${k}`);
-      const negMatch = gc.match(new RegExp(`(${negPatterns.join('|')})`, 'i'));
-      if (negMatch) {
-        const snippet   = extractSnippet(report.generalComment || '', negMatch[0]);
-        const quotePart = snippet ? `\n\nThe General Summary says: "${snippet}"` : '';
-        issues.push({ severity: 'error', question: `Q${q.number}`, questionText: q.text, answer: `Yes — ${q.scored}/${q.total}`, problem: `The binary answer is "Yes" (full marks) but the General Summary describes a negative experience in this area.${quotePart}` });
-      }
+  // ── CHECK 3: Second recommendation — brand selection vs comment ──
+  // Find what brand the comment describes as the second recommendation
+  const secondBrandInComment = (() => {
+    const secondIdx = gc.search(/second|also recommend|alternative|as well/);
+    if (secondIdx === -1) return null;
+    const afterSecond = gc.substring(secondIdx);
+    for (const b of BRANDS) {
+      if (afterSecond.includes(b.split(' ')[0].toLowerCase())) return b;
+    }
+    return null;
+  })();
+
+  if (report.secondBrand && secondBrandInComment) {
+    const selectedKey = report.secondBrand.split(' ')[0].toLowerCase();
+    const commentKey  = secondBrandInComment.split(' ')[0].toLowerCase();
+    if (selectedKey !== commentKey) {
+      issues.push({
+        severity: 'error',
+        title: 'Second brand selection contradicts comment',
+        detail: `Q6 has <strong>${report.secondBrand}</strong> selected but the General Comment describes <strong>${secondBrandInComment}</strong> as the second recommendation. One of these needs correcting.`
+      });
+    }
+  } else if (!report.secondBrand && secondBrandInComment) {
+    issues.push({
+      severity: 'error',
+      title: 'No second brand selected but comment implies one',
+      detail: `No brand is selected in Q6, but the General Comment describes <strong>${secondBrandInComment}</strong> as a second recommendation.`
+    });
+  } else if (report.secondBrand && !secondBrandInComment) {
+    const secondSection = report.sections.find(s => /second/i.test(s.name));
+    if (secondSection && secondSection.scored === 0) {
+      issues.push({
+        severity: 'warning',
+        title: 'Second brand selected but not mentioned in comment',
+        detail: `Q6 has <strong>${report.secondBrand}</strong> selected (scoring 0/${secondSection.total}) but the General Comment does not appear to reference a second recommendation. Verify whether a second rec actually occurred.`
+      });
     }
   }
 
-  if (gcWordCount > 0 && gcWordCount < 30) {
-    issues.push({ severity: 'error', question: 'General Summary', questionText: 'Summary is too brief', answer: `${gcWordCount} words`, problem: `The General Summary is only ${gcWordCount} words. For a shop with ${report.questions.length} questions, this needs significantly more detail.` });
-  } else if (gcWordCount >= 30 && gcWordCount < 60) {
-    issues.push({ severity: 'warning', question: 'General Summary', questionText: 'Summary may be too brief', answer: `${gcWordCount} words`, problem: `The General Summary is only ${gcWordCount} words. Consider whether this provides enough context for the client.` });
-  } else if (gcWordCount === 0) {
-    issues.push({ severity: 'error', question: 'General Summary', questionText: 'No General Summary detected', answer: 'Missing', problem: `Could not find a General Summary comment. This may be a parsing issue, or the summary is missing.` });
+  // ── CHECK 4: Q2 — Staff asked questions ──
+  if (report.q2 === 'No') {
+    const positiveSignals = ['asked', 'question', 'listened', 'understand', 'enquir', 'needs'];
+    if (positiveSignals.some(p => gc.includes(p))) {
+      issues.push({
+        severity: 'error',
+        title: 'Q2 answered No but comment suggests otherwise',
+        detail: `Q2 (Did the staff member ask questions?) is marked <strong>No</strong>, but the General Comment describes the staff member asking questions and/or listening to the shopper. One of these needs correcting.`
+      });
+    }
+  } else if (report.q2 === 'Yes') {
+    const negativeSignals = ["didn't ask", "did not ask", "no questions", "without asking", "never asked"];
+    if (negativeSignals.some(p => gc.includes(p))) {
+      issues.push({
+        severity: 'error',
+        title: 'Q2 answered Yes but comment suggests otherwise',
+        detail: `Q2 is marked <strong>Yes</strong> but the General Comment suggests the staff member did not ask questions.`
+      });
+    }
   }
 
+  // ── CHECK 5: General Comment length ──
+  if (gcWords === 0) {
+    issues.push({
+      severity: 'error',
+      title: 'No General Comment detected',
+      detail: 'Could not find a General Comment. It may be missing or the wrong PDF was uploaded.'
+    });
+  } else if (gcWords < 30) {
+    issues.push({
+      severity: 'error',
+      title: 'General Comment too brief',
+      detail: `Only <strong>${gcWords} words</strong>. The comment needs significantly more detail about what occurred during the visit.`
+    });
+  } else if (gcWords < 60) {
+    issues.push({
+      severity: 'warning',
+      title: 'General Comment may be too brief',
+      detail: `Only <strong>${gcWords} words</strong>. Consider whether this gives the client enough context about the visit.`
+    });
+  }
+
+  // ── CHECK 6: AI-generated language ──
   const aiPhrases = [
-    'overall experience was very positive','overall experience was positive','pleasant and welcoming atmosphere',
-    'communicated clearly throughout','making the shopping experience comfortable','handled this well by explaining',
-    'professional manner throughout','my overall experience at','the staff member greeted me promptly',
-    'was attentive and communicated','comfortable and enjoyable','comfortable and premium environment',
-    'creating a comfortable and premium','felt very pleasant and welcoming','making every effort to ensure',
-    'overall, the visit was','the shopping experience was both','a positive and memorable experience',
-    'courteous and professional','in a friendly and professional manner','was very helpful and knowledgeable',
-    'took the time to explain','went above and beyond','i was thoroughly impressed',
-    'the entire experience was seamless','a warm and inviting atmosphere','exceeded my expectations',
-    'demonstrated excellent knowledge','provided exceptional service','ensured that i felt valued',
-    'i felt valued as a customer','conducted themselves in a professional','maintaining a high standard',
-    'enhanced the overall experience'
+    'overall experience was very positive', 'overall experience was positive',
+    'pleasant and welcoming atmosphere', 'communicated clearly throughout',
+    'professional manner throughout', 'comfortable and enjoyable',
+    'comfortable and premium environment', 'felt very pleasant and welcoming',
+    'overall, the visit was', 'a positive and memorable experience',
+    'courteous and professional', 'in a friendly and professional manner',
+    'was very helpful and knowledgeable', 'went above and beyond',
+    'i was thoroughly impressed', 'the entire experience was seamless',
+    'a warm and inviting atmosphere', 'exceeded my expectations',
+    'demonstrated excellent knowledge', 'provided exceptional service',
+    'ensured that i felt valued', 'i felt valued as a customer',
+    'conducted themselves in a professional', 'maintaining a high standard',
+    'enhanced the overall experience', 'making the shopping experience',
+    'making every effort to ensure'
   ];
-  const detectedAI = aiPhrases.filter(p => gc.includes(p.toLowerCase()));
+  const detectedAI = aiPhrases.filter(p => gc.includes(p));
   if (detectedAI.length >= 3) {
-    issues.push({ severity: 'error', question: 'General Summary', questionText: 'AI-generated language detected', answer: `${detectedAI.length} AI phrases found`, problem: `The General Summary contains ${detectedAI.length} phrases commonly produced by ChatGPT/AI tools: "${detectedAI.slice(0,3).join('", "')}"${detectedAI.length > 3 ? ', and more' : ''}.` });
-  } else if (detectedAI.length === 2) {
-    issues.push({ severity: 'warning', question: 'General Summary', questionText: 'Possible AI-generated language', answer: `2 AI phrases found`, problem: `Found phrases commonly produced by AI: "${detectedAI.join('", "')}". Worth checking.` });
-  } else if (detectedAI.length === 1) {
-    issues.push({ severity: 'warning', question: 'General Summary', questionText: 'Possible AI-generated language', answer: '1 AI phrase found', problem: `Found a phrase commonly produced by AI: "${detectedAI[0]}". Might be fine on its own.` });
+    issues.push({
+      severity: 'error',
+      title: `AI-generated language detected (${detectedAI.length} phrases)`,
+      detail: `Phrases commonly produced by ChatGPT/AI: <em>"${detectedAI.slice(0, 3).join('", "')}"</em>${detectedAI.length > 3 ? `, and ${detectedAI.length - 3} more` : ''}. Comments must be written by the shopper, not polished by AI.`
+    });
+  } else if (detectedAI.length > 0) {
+    issues.push({
+      severity: 'warning',
+      title: 'Possible AI-generated language',
+      detail: `Found ${detectedAI.length} AI-typical phrase(s): <em>"${detectedAI.join('", "')}"</em>. Worth checking.`
+    });
   }
 
-  checkPaintRecommendations(report, issues);
   return issues;
 }
 
-// ── Paint recommendation checks ───────────────────────────────────────────────
-function checkPaintRecommendations(report, issues) {
-  const fullText = report.rawText || '';
-  if (!/First\s+Recommendation/i.test(fullText)) return;
-
-  const brandList = [
-    ['Taubmans Endure/All Weather', /taubmans\s+endure\s*\/\s*all\s+weather/i],
-    ['Taubmans Endure',            /taubmans\s+endure(?!\s*\/)/i],
-    ['Taubmans Easy Coat',         /taubmans\s+easy\s*coat/i],
-    ['Taubmans Sunproof',          /taubmans\s+sunproof/i],
-    ['Other Taubmans Products',    /other\s+taubmans/i],
-    ['Wattyl Solagard',            /wattyl\s+solagard/i],
-    ['Wattyl ID',                  /wattyl\s+id\b/i],
-    ['Other Wattyl Products',      /other\s+wattyl/i],
-    ['British Paints',             /british\s*paints/i],
-    ['Dulux',                      /\bdulux\b/i],
-    ['Accent',                     /\baccent\b/i],
-    ['Porters',                    /\bporters\b/i],
-  ];
-  // Broad checkmark pattern — updated once we know what PDF.js actually extracts
-  const checkmarkRx = /[✓✔✅☑\u2713\u2714\u2611\u2705]/;
-
-  function extractBlock(startRx, stopRx) {
-    const m = fullText.match(new RegExp(`(?:${startRx})[\\s\\S]*?(?=${stopRx}|$)`, 'i'));
-    return m ? m[0] : '';
-  }
-  function getSelectedBrand(block) {
-    if (!block) return null;
-    for (const line of block.split(/[\n\r]+/)) {
-      if (!checkmarkRx.test(line)) continue;
-      for (const [brand, rx] of brandList) { if (rx.test(line)) return brand; }
-    }
-    return null;
-  }
-  function getExplainText(block) {
-    if (!block) return '';
-    const m = block.match(/[Pp]lease\s+explain\s*:?\s*([\s\S]*?)(?=\n\s*\n|\n\s*[0-9]+\.|\n\s*[A-Z][a-z]|$)/);
-    return m ? m[1].trim() : '';
-  }
-  function findBrand(text) {
-    if (!text) return null;
-    for (const [brand, rx] of brandList) { if (rx.test(text)) return brand; }
-    return null;
-  }
-
-  const firstBlock  = extractBlock('First\\s+Recommendation', 'Second\\s+Recommendation');
-  const secondBlock = extractBlock('Second\\s+Recommendation', 'Sentiments|Spot\\s+Questions|General\\s+Comment|Question\\s+List');
-  const firstSelected  = getSelectedBrand(firstBlock);
-  const secondSelected = getSelectedBrand(secondBlock);
-  const firstMentioned  = findBrand(getExplainText(firstBlock));
-  const secondMentioned = findBrand(getExplainText(secondBlock));
-
-  if (firstSelected && firstMentioned && firstSelected.toLowerCase() !== firstMentioned.toLowerCase()) {
-    issues.push({ severity: 'error', question: 'First Recommendation', questionText: 'Brand mismatch in explanation', answer: `Selected: ${firstSelected}`, problem: `The selected first recommendation is "${firstSelected}" but the explanation text refers to "${firstMentioned}".` });
-  }
-  if (secondSelected && secondMentioned && secondSelected.toLowerCase() !== secondMentioned.toLowerCase()) {
-    issues.push({ severity: 'error', question: 'Second Recommendation', questionText: 'Brand mismatch in explanation', answer: `Selected: ${secondSelected}`, problem: `The selected second recommendation is "${secondSelected}" but the explanation text refers to "${secondMentioned}".` });
-  }
-
-  const gc = report.generalComment || '';
-  if (!gc) return;
-  const flaggedBrands = new Set();
-  for (const sentence of (gc.match(/[^.!?]+[.!?]*/g) || [gc])) {
-    const mentionedBrand = findBrand(sentence);
-    if (!mentionedBrand || flaggedBrands.has(mentionedBrand)) continue;
-    const isFirstCtx  = /\b(first|primary|initially|1st)\b/i.test(sentence);
-    const isSecondCtx = /\b(second|secondary|alternative|2nd)\b/i.test(sentence);
-    if (isFirstCtx && firstSelected && mentionedBrand.toLowerCase() !== firstSelected.toLowerCase()) {
-      flaggedBrands.add(mentionedBrand);
-      issues.push({ severity: 'error', question: 'First Recommendation (General Comment)', questionText: 'Brand mismatch in general comment', answer: `Selected: ${firstSelected}`, problem: `General comment refers to the first recommendation as "${mentionedBrand}" but selected first recommendation is "${firstSelected}".` });
-    } else if (isSecondCtx && secondSelected && mentionedBrand.toLowerCase() !== secondSelected.toLowerCase()) {
-      flaggedBrands.add(mentionedBrand);
-      issues.push({ severity: 'error', question: 'Second Recommendation (General Comment)', questionText: 'Brand mismatch in general comment', answer: `Selected: ${secondSelected}`, problem: `General comment refers to the second recommendation as "${mentionedBrand}" but selected second recommendation is "${secondSelected}".` });
-    } else if (!isFirstCtx && !isSecondCtx) {
-      const matchesFirst  = firstSelected  && mentionedBrand.toLowerCase() === firstSelected.toLowerCase();
-      const matchesSecond = secondSelected && mentionedBrand.toLowerCase() === secondSelected.toLowerCase();
-      if (!matchesFirst && !matchesSecond) {
-        flaggedBrands.add(mentionedBrand);
-        issues.push({ severity: 'warning', question: 'General Comment', questionText: 'Ambiguous brand mention', answer: mentionedBrand, problem: `General comment mentions "${mentionedBrand}" without making clear if this is the first or second recommendation. Selected: First="${firstSelected || '?'}", Second="${secondSelected || '?'}". Please clarify.` });
-      }
-    }
-  }
-}
-
-// ── Debug panel — reveals what PDF.js actually extracted ─────────────────────
-function buildDebugPanel(rawText) {
-  // Collect unique non-ASCII characters with one example context each
-  const seen = new Map();
-  for (let i = 0; i < rawText.length; i++) {
-    const code = rawText.charCodeAt(i);
-    if (code > 127 && !seen.has(code)) {
-      const ctx = rawText.substring(Math.max(0, i - 25), i + 26).replace(/\n/g, '\u21b5');
-      seen.set(code, { char: rawText[i], hex: code.toString(16).toUpperCase().padStart(4, '0'), ctx });
-    }
-  }
-
-  // Pull out lines in and around the Recommendation sections
-  const lines = rawText.split('\n');
-  const recLines = [];
-  let capturing = false;
-  for (let i = 0; i < lines.length; i++) {
-    if (/First\s+Recommendation|Second\s+Recommendation/i.test(lines[i])) capturing = true;
-    if (capturing) {
-      recLines.push({ n: i + 1, t: lines[i] });
-      if (recLines.length >= 50) break;
-    }
-  }
-
-  let h = `<div style="margin-top:1.5rem;border-top:1px solid var(--surface2);padding-top:1rem;">
-    <button class="btn btn-outline" style="font-size:0.78rem;padding:0.3rem 0.75rem;opacity:0.55;"
-      onclick="var p=this.nextElementSibling;p.style.display=p.style.display==='none'?'block':'none'">
-      &#128030; Debug: PDF text extraction
-    </button>
-    <div style="display:none;margin-top:0.75rem;">`;
-
-  // Non-ASCII character table
-  h += `<div style="background:var(--surface);border-radius:8px;padding:0.85rem 1rem;margin-bottom:0.75rem;">
-    <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-muted);">Non-ASCII characters extracted (${seen.size} unique)</h4>`;
-  if (seen.size === 0) {
-    h += `<p style="font-size:0.82rem;color:var(--yellow);">&#9888; Zero non-ASCII characters found. PDF.js is stripping or mapping all special glyphs to ASCII — ticked checkboxes may be lost completely. The raw lines below will show what appears near brand names.</p>`;
-  } else {
-    h += `<table style="font-size:0.78rem;border-collapse:collapse;width:100%;font-family:monospace;">
-      <tr style="color:var(--text-muted);font-size:0.72rem;"><th style="text-align:left;padding:0.2rem 0.4rem;">U+</th><th style="padding:0.2rem 0.4rem;">Char</th><th style="text-align:left;padding:0.2rem 0.4rem;">Context</th></tr>`;
-    for (const [, { char, hex, ctx }] of seen) {
-      h += `<tr style="border-top:1px solid var(--surface2);">
-        <td style="padding:0.25rem 0.4rem;color:var(--accent);">U+${hex}</td>
-        <td style="padding:0.25rem 0.4rem;font-size:1.1rem;text-align:center;">${escapeHtml(char)}</td>
-        <td style="padding:0.25rem 0.4rem;color:var(--text-muted);font-size:0.72rem;">${escapeHtml(ctx)}</td>
-      </tr>`;
-    }
-    h += `</table>`;
-  }
-  h += `</div>`;
-
-  // Recommendation section raw lines
-  if (recLines.length > 0) {
-    h += `<div style="background:var(--surface);border-radius:8px;padding:0.85rem 1rem;margin-bottom:0.75rem;">
-      <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-muted);">Raw lines in Recommendation section (look for tick characters)</h4>
-      <pre style="font-size:0.75rem;white-space:pre-wrap;color:var(--text-muted);max-height:220px;overflow-y:auto;">`;
-    for (const { n, t } of recLines) {
-      h += escapeHtml(`${String(n).padStart(4,' ')}: ${t}`) + '\n';
-    }
-    h += `</pre></div>`;
-  }
-
-  // Full raw text dump
-  h += `<div style="background:var(--surface);border-radius:8px;padding:0.85rem 1rem;">
-    <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-muted);">Full raw extracted text (first 4000 chars)</h4>
-    <pre style="font-size:0.72rem;white-space:pre-wrap;color:var(--text-muted);max-height:320px;overflow-y:auto;">${escapeHtml(rawText.substring(0, 4000))}</pre>
-  </div>`;
-
-  h += `</div></div>`;
-  return h;
-}
-
-// ── Render results ────────────────────────────────────────────────────────────
-function renderResults(report, issues, rawText) {
+// ── RENDER ───────────────────────────────────────────────────────────────────
+function renderResults(report, issues) {
   const errors   = issues.filter(i => i.severity === 'error');
   const warnings = issues.filter(i => i.severity === 'warning');
 
   let verdictClass, verdictIcon, verdictTitle, verdictDesc;
   if (errors.length === 0 && warnings.length <= 1) {
-    verdictClass = 'pass'; verdictIcon = '&#10004;';
+    verdictClass = 'pass';
+    verdictIcon  = '&#10004;';
     verdictTitle = 'CONSISTENT — Ready for review';
-    verdictDesc  = 'No major mismatches detected between binary answers and comments.';
+    verdictDesc  = 'No major mismatches detected between answers and comments.';
   } else if (errors.length === 0) {
-    verdictClass = 'warn'; verdictIcon = '&#9888;';
+    verdictClass = 'warn';
+    verdictIcon  = '&#9888;';
     verdictTitle = `REVIEW NEEDED — ${warnings.length} items to check`;
     verdictDesc  = 'No critical mismatches, but some areas need attention.';
   } else {
-    verdictClass = 'fail'; verdictIcon = '&#10008;';
+    verdictClass = 'fail';
+    verdictIcon  = '&#10008;';
     verdictTitle = `INCONSISTENT — ${errors.length} mismatch${errors.length > 1 ? 'es' : ''} found`;
-    verdictDesc  = 'Comments do not match binary answers. Send back to shopper or fix before finalising.';
+    verdictDesc  = 'Comments do not match answers. Send back to shopper or fix before finalising.';
   }
 
   let html = '';
 
+  // Format warning if not DSV
+  if (!report.isDSV) {
+    html += `<div class="format-warning">
+      <strong>Wrong PDF format?</strong>
+      This doesn't appear to be a DSV shopper report. Upload the PDF with a filename starting with "dsv_" for accurate checkbox detection. Results below may be incomplete.
+    </div>`;
+  }
+
+  // Shop header
   html += `<div class="shop-header">
-    <h2>${report.client || 'Shop Report'}</h2>
+    <h2>${escapeHtml(report.client || 'Shop Report')}</h2>
     <div class="shop-meta">
-      ${report.shopRef  ? `<span>Ref# ${report.shopRef}</span>` : ''}
-      ${report.shopper  ? `<span>Shopper: ${report.shopper}</span>` : ''}
-      ${report.shopDate ? `<span>Date: ${report.shopDate}</span>` : ''}
+      ${report.shopRef   ? `<span>Ref# ${escapeHtml(report.shopRef)}</span>`   : ''}
+      ${report.shopDate  ? `<span>Date: ${escapeHtml(report.shopDate)}</span>` : ''}
+      ${report.location  ? `<span>${escapeHtml(report.location)}</span>`       : ''}
     </div>
   </div>`;
 
+  // Stats bar
+  const firstSec  = report.sections.find(s => /first/i.test(s.name));
+  const secondSec = report.sections.find(s => /second/i.test(s.name));
+  const sentSec   = report.sections.find(s => /sentiments/i.test(s.name));
+
   html += `<div class="stats-bar">
     <div class="stat-box">
-      <div class="stat-value" style="color:${report.overallScore >= 80 ? 'var(--green)' : report.overallScore >= 60 ? 'var(--yellow)' : 'var(--red)'}">${report.overallScore || '—'}%</div>
+      <div class="stat-value" style="color:${report.overallScore >= 80 ? 'var(--green)' : report.overallScore >= 60 ? 'var(--yellow)' : 'var(--red)'}">
+        ${report.overallScore !== null ? report.overallScore + '%' : '—'}
+      </div>
       <div class="stat-label">Overall Score</div>
     </div>
-    <div class="stat-box"><div class="stat-value">${report.sections.length}</div><div class="stat-label">Sections</div></div>
-    <div class="stat-box"><div class="stat-value">${report.questions.length}</div><div class="stat-label">Questions Parsed</div></div>
     <div class="stat-box">
-      <div class="stat-value" style="color:${errors.length > 0 ? 'var(--red)' : 'var(--green)'}">${errors.length}</div>
+      <div class="stat-value" style="color:${firstSec && firstSec.percentage >= 60 ? 'var(--green)' : 'var(--red)'}">
+        ${firstSec ? firstSec.percentage + '%' : '—'}
+      </div>
+      <div class="stat-label">First Rec</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value" style="color:${secondSec && secondSec.percentage >= 60 ? 'var(--green)' : 'var(--red)'}">
+        ${secondSec ? secondSec.percentage + '%' : '—'}
+      </div>
+      <div class="stat-label">Second Rec</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value" style="color:${errors.length > 0 ? 'var(--red)' : 'var(--green)'}">
+        ${errors.length}
+      </div>
       <div class="stat-label">Mismatches</div>
     </div>
   </div>`;
 
+  // Verdict
   html += `<div class="verdict ${verdictClass}">
     <div class="verdict-icon">${verdictIcon}</div>
     <div><h3>${verdictTitle}</h3><p>${verdictDesc}</p></div>
   </div>`;
 
+  // Issues
   if (issues.length > 0) {
     html += `<h3 style="margin-bottom:0.75rem;font-size:1rem;">Issues Found</h3><div class="issues-list">`;
     for (const issue of issues) {
-      const cardClass = issue.severity === 'error' ? '' : issue.severity === 'info' ? 'info' : 'warning';
-      html += `<div class="issue-card ${cardClass}">
-        <h4>${escapeHtml(issue.question)}: ${escapeHtml(issue.questionText)}</h4>
-        <div class="issue-detail"><strong>Answer/Score:</strong> ${escapeHtml(issue.answer)}</div>
-        <div class="issue-detail"><strong>Problem:</strong> ${escapeHtml(issue.problem)}</div>
+      const cls = issue.severity === 'error' ? '' : 'warning';
+      html += `<div class="issue-card ${cls}">
+        <h4>${escapeHtml(issue.title)}</h4>
+        <div class="issue-detail">${issue.detail}</div>
       </div>`;
     }
     html += `</div>`;
   }
 
-  // AI check placeholder — filled in by appendAIIssues()
-  html += `<h3 style="margin:1.5rem 0 0.5rem;font-size:1rem;">AI Consistency Check <span class="ai-badge">AI</span></h3>
-  <p id="aiCheckStatus" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem;font-style:italic;">Running AI check&hellip;</p>`;
+  // Parsed answers panel
+  html += `<h3 style="margin:1.5rem 0 0.75rem;font-size:1rem;">Parsed Answers</h3>
+  <div class="section-card open">
+    <div class="section-body" style="display:block;">`;
 
-  if (report.generalComment) {
-    const preview = report.generalComment.substring(0, 3000);
-    html += `<h3 style="margin:1.5rem 0 0.75rem;font-size:1rem;">General Summary (Original + Cleaned)</h3>
-    <div id="cleanerBox" class="cleaner-box">
-      <div class="cleaner-grid">
-        <div class="cleaner-col">
-          <h4>Original</h4>
-          <div id="originalComment" class="cleaner-text">${escapeHtml(preview)}${report.generalComment.length > 3000 ? '...' : ''}</div>
-          <div class="cleaner-actions"><button class="btn btn-outline" onclick="copyTextById('originalComment')">Copy original</button></div>
-        </div>
-        <div class="cleaner-col">
-          <h4>Cleaned</h4>
-          <div id="cleanedComment" class="cleaner-text">Preparing cleaned version&hellip;</div>
-          <div class="cleaner-actions">
-            <button id="copyCleanedBtn" class="btn" onclick="copyTextById('cleanedComment')" disabled>Copy cleaned for SASSIE</button>
-          </div>
-        </div>
-      </div>
-      <div id="cleanerStatus" class="muted" style="margin-top:0.6rem;">Waiting&hellip;</div>
+  function answerRow(label, value) {
+    if (!value) return '';
+    const cls = value === 'Yes' ? 'yes' : value === 'No' ? 'no' : '';
+    return `<div class="answer-row">
+      <span class="answer-label">${label}</span>
+      <span class="answer-value ${cls}">${escapeHtml(value)}</span>
     </div>`;
   }
 
-  html += buildDebugPanel(rawText);
+  html += answerRow('First Brand', report.firstBrand || 'Not detected');
+  html += answerRow('Second Brand', report.secondBrand || 'None');
+  html += answerRow('Q2 — Staff asked questions?', report.q2 || 'Not detected');
+  html += answerRow('Q11 — Pre-tinned mentioned?', report.q11 || 'Not detected');
+  html += answerRow('Q11a — Alternative colour?', report.q11a || 'Not detected');
 
-  html += `<div class="reset-bar"><button class="btn btn-outline" onclick="resetApp()">Check Another Report</button></div>`;
+  if (report.sections.length > 0) {
+    for (const s of report.sections) {
+      html += answerRow(s.name, `${s.percentage}% (${s.scored}/${s.total})`);
+    }
+  }
+
+  html += `</div></div>`;
+
+  // General Comment
+  if (report.generalComment) {
+    html += `<h3 style="margin:1.5rem 0 0.75rem;font-size:1rem;">General Comment (extracted)</h3>
+    <div class="section-card open">
+      <div class="section-body" style="display:block;">
+        <div class="q-comment">${escapeHtml(report.generalComment.substring(0, 2000))}${report.generalComment.length > 2000 ? '...' : ''}</div>
+      </div>
+    </div>`;
+  }
+
+  // Reset
+  html += `<div class="reset-bar">
+    <button class="btn btn-outline" onclick="resetApp()">Check Another Report</button>
+  </div>`;
 
   results.innerHTML = html;
   results.style.display = 'block';
@@ -894,31 +762,6 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = String(text);
   return div.innerHTML;
-}
-
-async function autoCleanGeneralComment(originalComment) {
-  const box    = document.getElementById('cleanerBox');
-  if (!box) return;
-  const status    = document.getElementById('cleanerStatus');
-  const cleanedEl = document.getElementById('cleanedComment');
-  const copyBtn   = document.getElementById('copyCleanedBtn');
-  status.textContent = 'Cleaning comment with AI\u2026';
-  try {
-    const res = await fetch(CLEANER_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comment: originalComment }) });
-    if (!res.ok) throw new Error(`Cleaner API error (${res.status})`);
-    const data = await res.json();
-    cleanedEl.textContent = data.cleaned || originalComment;
-    status.textContent = 'Cleaned automatically. Review then copy into SASSIE.';
-    copyBtn.disabled = false;
-  } catch (e) {
-    cleanedEl.textContent = originalComment;
-    status.textContent = 'Cleaner unavailable. Showing original text. Start backend on Mac mini to enable cleaning.';
-    copyBtn.disabled = false;
-  }
-}
-
-function copyTextById(id) {
-  navigator.clipboard.writeText(document.getElementById(id)?.textContent || '');
 }
 
 function resetApp() {
