@@ -443,7 +443,7 @@ async function processFile(file) {
     aiCheckConsistency(parsed).then(aiIssues => appendAIIssues(aiIssues));
 
   } catch (err) {
-    results.innerHTML = `<div class="verdict fail"><div class="verdict-icon">&#9888;</div><div><h3>Error parsing PDF</h3><p>${err.message}. Make sure this is a SASSIE shop review PDF printed via File → Print → Save as PDF.</p></div></div>`;
+    results.innerHTML = `<div class="verdict fail"><div class="verdict-icon">&#9888;</div><div><h3>Error parsing PDF</h3><p>${err.message}. Make sure this is a SASSIE shop review PDF printed via File &rarr; Print &rarr; Save as PDF.</p></div></div>`;
     results.style.display = 'block';
   }
   processing.style.display = 'none';
@@ -640,11 +640,6 @@ function checkConsistency(report) {
 }
 
 // ── Paint recommendation checks ───────────────────────────────────────────────
-function extractTopicWords(questionText) {
-  const stopWords = new Set(['was','were','the','a','an','did','do','does','all','are','is','you','your','they','their','team','member','members','when','first','have','has','had','been','being','from','this','that','with','for','and','but','not','any','can','could','would','should','into','each','every','how','what','who','where','why','which']);
-  return questionText.toLowerCase().replace(/[^a-z\s]/g,'').split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w));
-}
-
 function checkPaintRecommendations(report, issues) {
   const fullText = report.rawText || '';
   if (!/First\s+Recommendation/i.test(fullText)) return;
@@ -663,7 +658,8 @@ function checkPaintRecommendations(report, issues) {
     ['Accent',                     /\baccent\b/i],
     ['Porters',                    /\bporters\b/i],
   ];
-  const checkmarkRx = /[✓✔✅☑]/;
+  // Broad checkmark pattern — updated once we know what PDF.js actually extracts
+  const checkmarkRx = /[✓✔✅☑\u2713\u2714\u2611\u2705]/;
 
   function extractBlock(startRx, stopRx) {
     const m = fullText.match(new RegExp(`(?:${startRx})[\\s\\S]*?(?=${stopRx}|$)`, 'i'));
@@ -725,6 +721,77 @@ function checkPaintRecommendations(report, issues) {
       }
     }
   }
+}
+
+// ── Debug panel — reveals what PDF.js actually extracted ─────────────────────
+function buildDebugPanel(rawText) {
+  // Collect unique non-ASCII characters with one example context each
+  const seen = new Map();
+  for (let i = 0; i < rawText.length; i++) {
+    const code = rawText.charCodeAt(i);
+    if (code > 127 && !seen.has(code)) {
+      const ctx = rawText.substring(Math.max(0, i - 25), i + 26).replace(/\n/g, '\u21b5');
+      seen.set(code, { char: rawText[i], hex: code.toString(16).toUpperCase().padStart(4, '0'), ctx });
+    }
+  }
+
+  // Pull out lines in and around the Recommendation sections
+  const lines = rawText.split('\n');
+  const recLines = [];
+  let capturing = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (/First\s+Recommendation|Second\s+Recommendation/i.test(lines[i])) capturing = true;
+    if (capturing) {
+      recLines.push({ n: i + 1, t: lines[i] });
+      if (recLines.length >= 50) break;
+    }
+  }
+
+  let h = `<div style="margin-top:1.5rem;border-top:1px solid var(--surface2);padding-top:1rem;">
+    <button class="btn btn-outline" style="font-size:0.78rem;padding:0.3rem 0.75rem;opacity:0.55;"
+      onclick="var p=this.nextElementSibling;p.style.display=p.style.display==='none'?'block':'none'">
+      &#128030; Debug: PDF text extraction
+    </button>
+    <div style="display:none;margin-top:0.75rem;">`;
+
+  // Non-ASCII character table
+  h += `<div style="background:var(--surface);border-radius:8px;padding:0.85rem 1rem;margin-bottom:0.75rem;">
+    <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-muted);">Non-ASCII characters extracted (${seen.size} unique)</h4>`;
+  if (seen.size === 0) {
+    h += `<p style="font-size:0.82rem;color:var(--yellow);">&#9888; Zero non-ASCII characters found. PDF.js is stripping or mapping all special glyphs to ASCII — ticked checkboxes may be lost completely. The raw lines below will show what appears near brand names.</p>`;
+  } else {
+    h += `<table style="font-size:0.78rem;border-collapse:collapse;width:100%;font-family:monospace;">
+      <tr style="color:var(--text-muted);font-size:0.72rem;"><th style="text-align:left;padding:0.2rem 0.4rem;">U+</th><th style="padding:0.2rem 0.4rem;">Char</th><th style="text-align:left;padding:0.2rem 0.4rem;">Context</th></tr>`;
+    for (const [, { char, hex, ctx }] of seen) {
+      h += `<tr style="border-top:1px solid var(--surface2);">
+        <td style="padding:0.25rem 0.4rem;color:var(--accent);">U+${hex}</td>
+        <td style="padding:0.25rem 0.4rem;font-size:1.1rem;text-align:center;">${escapeHtml(char)}</td>
+        <td style="padding:0.25rem 0.4rem;color:var(--text-muted);font-size:0.72rem;">${escapeHtml(ctx)}</td>
+      </tr>`;
+    }
+    h += `</table>`;
+  }
+  h += `</div>`;
+
+  // Recommendation section raw lines
+  if (recLines.length > 0) {
+    h += `<div style="background:var(--surface);border-radius:8px;padding:0.85rem 1rem;margin-bottom:0.75rem;">
+      <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-muted);">Raw lines in Recommendation section (look for tick characters)</h4>
+      <pre style="font-size:0.75rem;white-space:pre-wrap;color:var(--text-muted);max-height:220px;overflow-y:auto;">`;
+    for (const { n, t } of recLines) {
+      h += escapeHtml(`${String(n).padStart(4,' ')}: ${t}`) + '\n';
+    }
+    h += `</pre></div>`;
+  }
+
+  // Full raw text dump
+  h += `<div style="background:var(--surface);border-radius:8px;padding:0.85rem 1rem;">
+    <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-muted);">Full raw extracted text (first 4000 chars)</h4>
+    <pre style="font-size:0.72rem;white-space:pre-wrap;color:var(--text-muted);max-height:320px;overflow-y:auto;">${escapeHtml(rawText.substring(0, 4000))}</pre>
+  </div>`;
+
+  h += `</div></div>`;
+  return h;
 }
 
 // ── Render results ────────────────────────────────────────────────────────────
@@ -791,7 +858,7 @@ function renderResults(report, issues, rawText) {
 
   // AI check placeholder — filled in by appendAIIssues()
   html += `<h3 style="margin:1.5rem 0 0.5rem;font-size:1rem;">AI Consistency Check <span class="ai-badge">AI</span></h3>
-  <p id="aiCheckStatus" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem;font-style:italic;">Running AI check…</p>`;
+  <p id="aiCheckStatus" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem;font-style:italic;">Running AI check&hellip;</p>`;
 
   if (report.generalComment) {
     const preview = report.generalComment.substring(0, 3000);
@@ -805,15 +872,17 @@ function renderResults(report, issues, rawText) {
         </div>
         <div class="cleaner-col">
           <h4>Cleaned</h4>
-          <div id="cleanedComment" class="cleaner-text">Preparing cleaned version…</div>
+          <div id="cleanedComment" class="cleaner-text">Preparing cleaned version&hellip;</div>
           <div class="cleaner-actions">
             <button id="copyCleanedBtn" class="btn" onclick="copyTextById('cleanedComment')" disabled>Copy cleaned for SASSIE</button>
           </div>
         </div>
       </div>
-      <div id="cleanerStatus" class="muted" style="margin-top:0.6rem;">Waiting…</div>
+      <div id="cleanerStatus" class="muted" style="margin-top:0.6rem;">Waiting&hellip;</div>
     </div>`;
   }
+
+  html += buildDebugPanel(rawText);
 
   html += `<div class="reset-bar"><button class="btn btn-outline" onclick="resetApp()">Check Another Report</button></div>`;
 
@@ -833,7 +902,7 @@ async function autoCleanGeneralComment(originalComment) {
   const status    = document.getElementById('cleanerStatus');
   const cleanedEl = document.getElementById('cleanedComment');
   const copyBtn   = document.getElementById('copyCleanedBtn');
-  status.textContent = 'Cleaning comment with AI…';
+  status.textContent = 'Cleaning comment with AI\u2026';
   try {
     const res = await fetch(CLEANER_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comment: originalComment }) });
     if (!res.ok) throw new Error(`Cleaner API error (${res.status})`);
