@@ -202,14 +202,48 @@
   .stat-value { font-size: 1.5rem; font-weight: 700; }
   .stat-label { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
 
-  .q-comment {
+  .comment-box {
     background: var(--bg);
-    padding: 0.6rem 0.85rem;
-    border-radius: 6px;
-    margin-top: 0.35rem;
-    font-size: 0.84rem;
-    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    font-size: 0.88rem;
+    color: var(--text);
     white-space: pre-wrap;
+    line-height: 1.7;
+    min-height: 60px;
+  }
+  .comment-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .clean-btn-row {
+    margin-top: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .cleaning-spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid var(--surface2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 0.4rem;
+  }
+  .cleaned-section { margin-top: 1rem; display: none; }
+  .diff-badge {
+    font-size: 0.75rem;
+    background: var(--green-bg);
+    color: var(--green);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    margin-left: 0.5rem;
   }
 
   .format-warning {
@@ -654,7 +688,7 @@ function renderResults(report, issues) {
   } else {
     verdictClass = 'fail';
     verdictIcon  = '&#10008;';
-    verdictTitle = `INCONSISTENT — ${errors.length} mismatch${errors.length > 1 ? 'es' : ''} found`;
+    verdictTitle = `INCONSISTENT — ${issues.length} mismatch${issues.length > 1 ? 'es' : ''} found`;
     verdictDesc  = 'Comments do not match answers. Send back to shopper or fix before finalising.';
   }
 
@@ -759,10 +793,25 @@ function renderResults(report, issues) {
 
   // General Comment
   if (report.generalComment) {
-    html += `<h3 style="margin:1.5rem 0 0.75rem;font-size:1rem;">General Comment (extracted)</h3>
+    const gcSafe = escapeHtml(report.generalComment);
+    const gcJson = JSON.stringify(report.generalComment);
+    html += `<h3 style="margin:1.5rem 0 0.75rem;font-size:1rem;">General Comment</h3>
     <div class="section-card open">
       <div class="section-body" style="display:block;">
-        <div class="q-comment">${escapeHtml(report.generalComment.substring(0, 2000))}${report.generalComment.length > 2000 ? '...' : ''}</div>
+        <div class="comment-label">Original — extracted from PDF</div>
+        <div class="comment-box" id="gc-original">${gcSafe}</div>
+        <div class="clean-btn-row">
+          <button class="btn btn-outline" id="gc-clean-btn" onclick="cleanComment(${gcJson})">
+            ✦ Clean with AI
+          </button>
+          <span id="gc-status" style="font-size:0.82rem;color:var(--text-muted);"></span>
+        </div>
+        <div class="cleaned-section" id="gc-cleaned-section">
+          <div class="comment-label" style="margin-top:1rem;">
+            Cleaned <span class="diff-badge">AI edited</span>
+          </div>
+          <div class="comment-box" id="gc-cleaned-text" style="border-color:var(--green);"></div>
+        </div>
       </div>
     </div>`;
   }
@@ -774,6 +823,34 @@ function renderResults(report, issues) {
 
   results.innerHTML = html;
   results.style.display = 'block';
+}
+
+async function cleanComment(comment) {
+  const btn    = document.getElementById('gc-clean-btn');
+  const status = document.getElementById('gc-status');
+  const section = document.getElementById('gc-cleaned-section');
+  const cleaned = document.getElementById('gc-cleaned-text');
+
+  btn.disabled = true;
+  status.innerHTML = '<span class="cleaning-spinner"></span> Cleaning…';
+
+  try {
+    const res = await fetch('/api/clean-comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comment })
+    });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const data = await res.json();
+    cleaned.textContent = data.cleaned || 'No response received.';
+    section.style.display = 'block';
+    status.textContent = 'Done';
+    btn.textContent = '↻ Re-clean';
+  } catch (err) {
+    status.textContent = 'Error: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function escapeHtml(text) {
