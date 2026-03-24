@@ -1,0 +1,45 @@
+{
+  "_readme": "Add client-specific QC rules here. 'detect' is text that must appear in the survey name to match this client. Rules are evaluated against the parsed report. Tell Claude what rule you want to add and it will update this file.",
+  "clients": [
+    {
+      "name": "Paint Shop",
+      "detect": "Paint Shop",
+      "rules": [
+        {
+          "id": "paint_second_rec_in_comment_but_zero_score",
+          "description": "Second Recommendation not filled in but comment describes one",
+          "severity": "error",
+          "conditions": {
+            "comment_contains_any": [
+              "second recommendation",
+              "second best",
+              "also recommended",
+              "alternative",
+              "also suggested",
+              "second option",
+              "second paint"
+            ],
+            "section_score_is_zero": "Second Recommendation"
+          },
+          "message": "The General Comment describes a second recommendation but the Second Recommendation section scored 0. The shopper needs to complete Q6 and the related sub-questions."
+        },
+        {
+          "id": "paint_first_rec_in_comment_but_zero_score",
+          "description": "First Recommendation not filled in but comment describes one",
+          "severity": "error",
+          "conditions": {
+            "comment_contains_any": [
+              "first recommendation",
+              "recommended",
+              "suggested the",
+              "best paint",
+              "first suggested"
+            ],
+            "section_score_is_zero": "First Recommendation"
+          },
+          "message": "The General Comment describes a first recommendation but the First Recommendation section scored 0. The shopper needs to complete Q3 and the related sub-questions."
+        }
+      ]
+    }
+  ]
+}
