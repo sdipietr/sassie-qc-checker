@@ -290,7 +290,7 @@ async function processFile(file) {
 
     const parsed = parseShopReport(fullText, pages);
     const issues = checkConsistency(parsed);
-    renderResults(parsed, issues, fullText);
+    renderResults(parsed, issues);
   } catch (err) {
     results.innerHTML = `<div class="verdict fail">
       <div class="verdict-icon">&#9888;</div>
@@ -636,7 +636,7 @@ function checkConsistency(report) {
 }
 
 // ── RENDER ───────────────────────────────────────────────────────────────────
-function renderResults(report, issues, rawText) {
+function renderResults(report, issues) {
   const errors   = issues.filter(i => i.severity === 'error');
   const warnings = issues.filter(i => i.severity === 'warning');
 
@@ -766,28 +766,6 @@ function renderResults(report, issues, rawText) {
       </div>
     </div>`;
   }
-
-  // Debug panel
-  const CHECKED = '\ue61d';
-  function findBodySection(haystack, name) {
-    const escaped = name.replace(/[()\/]/g, c => '\\' + c);
-    const m = new RegExp(escaped + '\\s+\\d+%\\s*\\(\\d+\\/\\d+\\)').exec(haystack);
-    return m ? m.index : -1;
-  }
-  const dbgFirst  = findBodySection(rawText, 'First Recommendation');
-  const dbgSecond = findBodySection(rawText, 'Second Recommendation');
-  const dbgSent   = rawText.indexOf('Sentiments', dbgSecond + 1);
-  const dbgSection = dbgSecond !== -1 ? rawText.substring(dbgSecond, dbgSent !== -1 ? dbgSent : dbgSecond + 500) : 'NOT FOUND';
-  const checkedLines = rawText.split('\n').filter(l => l.includes(CHECKED)).map(l => escapeHtml(l)).join('<br>');
-
-  html += `<h3 style="margin:1.5rem 0 0.75rem;font-size:1rem;color:var(--yellow)">Debug</h3>
-  <div class="section-card open"><div class="section-body" style="display:block;font-size:0.78rem;font-family:monospace;">
-    <div><strong>firstRecStart:</strong> ${dbgFirst}</div>
-    <div><strong>secondRecStart:</strong> ${dbgSecond}</div>
-    <div><strong>sentStart:</strong> ${dbgSent}</div>
-    <div style="margin-top:0.5rem"><strong>Second rec section (first 300 chars):</strong><br><pre style="white-space:pre-wrap;color:var(--text-muted)">${escapeHtml(dbgSection.substring(0, 300))}</pre></div>
-    <div style="margin-top:0.5rem"><strong>All \\ue61d lines:</strong><br>${checkedLines}</div>
-  </div></div>`;
 
   // Reset
   html += `<div class="reset-bar">
