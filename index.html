@@ -424,16 +424,19 @@ function parseShopReport(text, pages) {
   const gcStart        = text.indexOf('General Comments');
 
   function findCheckedBrand(sectionText) {
+    const candidates = [];
     for (const brand of BRANDS) {
-      // Escape regex special chars in brand name
       const escaped = brand.replace(/[()\/]/g, c => '\\' + c);
-      // Allow up to 100 chars between brand name and CHECKED — needed for long option
-      // text like "Other Taubmans Products (not Endure, EasyCoat, Sunproof or All Weather)"
-      if (new RegExp(escaped + '.{0,100}\ue61d', 's').test(sectionText)) {
-        return brand;
-      }
+      // Non-greedy: find the CLOSEST checkmark after the brand name (max 80 chars)
+      // This prevents a brand earlier in the list from stealing a checkmark that
+      // belongs to a later option whose parenthetical text is shorter.
+      const m = new RegExp(escaped + '(.{0,80}?)\ue61d', 's').exec(sectionText);
+      if (m) candidates.push({ brand, distance: m[1].length });
     }
-    return '';
+    if (candidates.length === 0) return '';
+    // Return the brand whose checkmark is closest (least intervening text)
+    candidates.sort((a, b) => a.distance - b.distance);
+    return candidates[0].brand;
   }
 
   if (firstRecStart !== -1) {
@@ -507,10 +510,20 @@ function checkConsistency(report) {
     const secondIdx = gc.search(/second|also recommend|alternative|as well/);
     if (secondIdx === -1) return null;
     const afterSecond = gc.substring(secondIdx);
+    // Find the brand that appears EARLIEST after the "second" keyword
+    // (not just first in the BRANDS array) to avoid picking up brands
+    // mentioned later in a different context
+    let earliest = null;
+    let earliestIdx = Infinity;
     for (const b of BRANDS) {
-      if (afterSecond.includes(b.split(' ')[0].toLowerCase())) return b;
+      const key = b.split(' ')[0].toLowerCase();
+      const idx = afterSecond.indexOf(key);
+      if (idx !== -1 && idx < earliestIdx) {
+        earliestIdx = idx;
+        earliest = b;
+      }
     }
-    return null;
+    return earliest;
   })();
 
   if (report.secondBrand && secondBrandInComment) {
