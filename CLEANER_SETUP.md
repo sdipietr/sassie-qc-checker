@@ -1,6 +1,6 @@
-# Cleaner API setup (Mac mini) — OpenClaw OAuth mode
+# Cleaner API setup
 
-This uses your existing OpenClaw OAuth session (no OpenAI API key required).
+The QC checker calls Claude through the Anthropic Messages API. `ANTHROPIC_API_KEY` is required. Do not commit the key or put it in this repo.
 
 ## 1) Install backend deps
 
@@ -9,10 +9,16 @@ cd ~/path/to/sassie-qc-checker
 npm install
 ```
 
-## 2) Ensure OpenClaw OAuth is working
+## 2) Configure
 
 ```bash
-openclaw status
+export ANTHROPIC_API_KEY=your-key-here
+```
+
+Optional model override (default `claude-opus-5`):
+
+```bash
+export QC_ANTHROPIC_MODEL=claude-opus-5
 ```
 
 ## 3) Run cleaner server
@@ -23,21 +29,13 @@ npm run cleaner
 
 Server runs at: `http://127.0.0.1:8787`
 
+`GET /health` returns `{ "ok": true, "provider": "anthropic", "model": "..." }` and never includes the API key.
+
 ## 4) Use the site
 
-Open the GitHub Pages site, upload report PDF.
-The app will automatically call the cleaner API and show:
-- Original comment
-- Cleaned comment
-- Copy cleaned for SASSIE
+Open the site and upload a shopper report PDF. The page calls:
 
-If backend is down, it falls back to showing original text.
+- `POST /api/clean-comments` → `{ "cleaned": "..." }`
+- `POST /api/check-consistency` → `{ "issues": [ ... ] }`
 
-## Model choice note
-Cleaner is configured to use dedicated OpenClaw agent `cleaner` (OAuth) so your main default can stay on Codex 5.3.
-Current cleaner model: `openai/gpt-4o`.
-
-Optional override:
-```bash
-CLEANER_AGENT_ID=cleaner npm run cleaner
-```
+If the key is missing or Claude cannot be reached, the page shows **AI check unavailable** with the reason, and the cleaner shows **Cleaner unavailable** with the reason, instead of a silent empty result.
