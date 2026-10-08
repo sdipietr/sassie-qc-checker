@@ -354,8 +354,12 @@ async function aiCheckConsistency(report) {
         generalComment: report.generalComment
       })
     });
-    if (!res.ok) return [];
-    const data = await res.json();
+    let data = null;
+    try { data = await res.json(); } catch (_) { data = null; }
+    if (!res.ok || !data || data.error) {
+      const reason = (data && data.error) || `request failed (${res.status})`;
+      return { unavailable: reason };
+    }
     return (data.issues || []).map(i => ({
       severity:     i.severity     || 'warning',
       question:     i.question     || 'AI Check',
@@ -363,16 +367,30 @@ async function aiCheckConsistency(report) {
       answer:       '—',
       problem:      i.problem      || ''
     }));
-  } catch (_) {
-    return [];
+  } catch (err) {
+    return { unavailable: err.message || 'request failed' };
   }
 }
 
-function appendAIIssues(aiIssues) {
+function appendAIIssues(result) {
+  const statusEl = document.getElementById('aiCheckStatus');
+  if (result && result.unavailable) {
+    document.getElementById('aiIssuesSection')?.remove();
+    if (statusEl) {
+      const reason = String(result.unavailable);
+      statusEl.textContent = /AI check unavailable/i.test(reason)
+        ? reason
+        : `AI check unavailable: ${reason}`;
+      statusEl.style.color = 'var(--yellow)';
+      statusEl.style.fontStyle = 'normal';
+    }
+    return;
+  }
+
+  const aiIssues = Array.isArray(result) ? result : [];
   const existing = document.getElementById('aiIssuesSection');
   if (existing) existing.remove();
 
-  const statusEl = document.getElementById('aiCheckStatus');
   if (statusEl) {
     statusEl.textContent = aiIssues.length
       ? `AI check complete — ${aiIssues.length} additional item${aiIssues.length > 1 ? 's' : ''} flagged.`
@@ -1020,14 +1038,18 @@ async function autoCleanGeneralComment(originalComment) {
   status.textContent = 'Cleaning comment with AI\u2026';
   try {
     const res = await fetch(CLEANER_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comment: originalComment }) });
-    if (!res.ok) throw new Error(`Cleaner API error (${res.status})`);
-    const data = await res.json();
-    cleanedEl.textContent = data.cleaned || originalComment;
+    let data = null;
+    try { data = await res.json(); } catch (_) { data = null; }
+    if (!res.ok || !data || data.error || !data.cleaned) {
+      const reason = (data && data.error) || `Cleaner API error (${res.status})`;
+      throw new Error(reason);
+    }
+    cleanedEl.textContent = data.cleaned;
     status.textContent = 'Cleaned automatically. Review then copy into SASSIE.';
     copyBtn.disabled = false;
   } catch (e) {
     cleanedEl.textContent = originalComment;
-    status.textContent = 'Cleaner unavailable. Showing original text. Start backend on Mac mini to enable cleaning.';
+    status.textContent = `Cleaner unavailable: ${e.message || 'request failed'}. Showing original text.`;
     copyBtn.disabled = false;
   }
 }

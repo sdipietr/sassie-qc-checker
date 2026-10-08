@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "cleaner": "node cleaner-server.js"
+    "cleaner": "node cleaner-server.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
